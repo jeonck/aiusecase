@@ -40,6 +40,8 @@ ego lite 는 사람과 에이전트가 같이 쓰도록 만든 Chromium 입니�
 2026 State of Infrastructure Automation - The AI Readiness Gap .pdf 파일을 finder에 열어 두었어.
 {{< /prompt >}}
 
+{{< screenshot src="00-spaces.png" alt="ego lite Spaces 화면" caption="ego lite의 Spaces 화면(⌥S). 왼쪽이 사람의 브라우저, 가운데가 끝난 NotebookLM 스페이스(Done), 오른쪽이 실행 중인 Gemini 웹앱 스페이스(Running). 에이전트 작업이 내 탭과 섞이지 않고, 상태가 한눈에 보입니다." >}}
+
 Claude 는 `ego-browser nodejs <<'EOF' … EOF` 형태로 스크립트를 실행합니다. 원칙 세 가지:
 
 - **목표 하나 = TaskSpace 하나.** `taskSpace("이름")` 으로 만들고 `spaceId` 를 기억해, 다음 라운드는 `taskSpace(3)` 으로 이어 갑니다. 탭과 `p1` 같은 페이지 라벨은 라운드 사이에 살아남고, JS 변수는 죽습니다
@@ -99,6 +101,7 @@ await page.waitForFunction(() => !document.querySelector('button[aria-label*="�
 - **브라우저 자체 UI 는 범위 밖입니다.** Chrome 의 Ask Gemini 사이드 패널, 확장 프로그램 팝업, 주소창은 ego lite 에도 없거나 못 건드립니다. 그런 사례는 여전히 [사람이 화면을 맞추고 Claude 가 찍는 방식]({{< relref "/docs/usecases/research/drive-pdf-summary-ask-gemini" >}})입니다.
 - **끝나면 `task.finish({ keep: [] })`.** 결과 페이지를 사용자가 봐야 하면 `keep: ["p1"]`. 사용자가 직접 연 탭은 `keep: []` 이어도 닫히지 않습니다.
 - 스크립트마다 새 Node 프로세스라 변수는 안 남고, 스페이스·탭·라벨만 남습니다. `spaceId` 를 대화에 남겨 두세요.
+- **에이전트 스페이스는 별도 창처럼 동작합니다.** `open -a` 나 AppleScript 로는 사람의 창만 잡힙니다. 에이전트 화면을 보려면 Spaces 화면(⌥S)에서 해당 스페이스를 고르거나, 스크립트에서 `task.handOff()` 로 넘기면 Spaces 화면이 뜹니다. 그때 스페이스 카드에 `Need your action` 이 붙습니다.
 
 ## 응용
 
