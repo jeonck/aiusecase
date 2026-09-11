@@ -82,6 +82,8 @@ await page.waitForFunction(() => !document.querySelector('button[aria-label*="�
 ```
 
 응답 완료는 "응답 중지" 버튼이 사라지는 것으로 잡았습니다. 고정 `waitForTimeout` 보다 관찰 가능한 조건이 낫습니다.
+
+{{< screenshot src="05-agent-in-control.png" alt="ego lite 에이전트 제어 중 화면" caption="에이전트가 조작 중일 때 사람에게 보이는 화면. 아래 'Agent is in control' 바에 Take over / Stop 버튼, 화면에는 에이전트 커서와 지금 하는 동작 라벨(슬라이드 자료 확인 중)이 뜹니다. 언제든 Take over 로 사람이 이어받을 수 있습니다." >}}
 결과 자체는 [실패 사례]({{< relref "/docs/usecases/automation/gemini-webapp-gmail-to-calendar-autonomous" >}})였지만, 그건 Gemini 의 판단 문제지 조작 문제가 아니었습니다 — 오히려 "자동화가 잘 될수록 잘못된 쓰기 작업도 잘 된다" 는 교훈이 남았습니다.
 {{< /step >}}
 
