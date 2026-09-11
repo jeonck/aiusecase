@@ -1,0 +1,22 @@
+# Argo CD Application: 이 저장소의 deploy/aiusecases 차트를 demo 네임스페이스에 자동 동기화
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aiusecases
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/jeonck/aiusecase.git
+    targetRevision: main
+    path: deploy/aiusecases
+    helm:
+      valueFiles: [values.yaml]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: demo
+  syncPolicy:
+    automated:
+      prune: true      # Git에서 지운 리소스는 클러스터에서도 지운다
+      selfHeal: true   # 클러스터를 손으로 바꾸면 Git 상태로 되돌린다
+    syncOptions: [CreateNamespace=true]
