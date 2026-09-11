@@ -1,0 +1,31 @@
+{{- /*
+  OG 카드 생성. 테마 기본 파티셜은 Poppins 폰트를 써서 한글이 □ 로 깨지고,
+  제목이 길면 설명과 겹친다. 한글 폰트(Nanum Gothic, OFL)와 줄 수 추정으로 바꾼다.
+  페이지 번들에 *feature* / *cover* / *thumbnail* 이미지가 있으면 그걸 우선 쓴다.
+*/ -}}
+{{- $images := $.Resources.ByType "image" -}}
+{{- $featured := $images.GetMatch "*feature*" -}}
+{{- if not $featured }}{{ $featured = $images.GetMatch "{*cover*,*thumbnail*}" }}{{ end -}}
+{{- if not $featured -}}
+  {{- $base := resources.Get "opengraph/card-base.png" -}}
+  {{- $bold := resources.Get "opengraph/NanumGothic-Bold.ttf" -}}
+  {{- $regular := resources.Get "opengraph/NanumGothic-Regular.ttf" -}}
+
+  {{- $title := $.LinkTitle -}}
+  {{- $n := strings.RuneCount $title -}}
+  {{- /* 한 줄 약 20자(56px) 기준. 길면 글자를 줄여 줄 수를 억제한다. */ -}}
+  {{- $size := 56 -}}{{- $perLine := 19 -}}
+  {{- if gt $n 38 }}{{ $size = 46 }}{{ $perLine = 23 }}{{ end -}}
+  {{- $lines := math.Ceil (div (float $n) (float $perLine)) -}}
+  {{- $titleY := 175 -}}
+  {{- $descY := add $titleY (int (mul $lines (add $size 14))) | add 26 -}}
+
+  {{- $filters := slice (images.Text $title (dict "color" "#f8fafc" "size" $size "lineSpacing" 14 "x" 70 "y" $titleY "font" $bold)) -}}
+  {{- with $.Description -}}
+    {{- $desc := . -}}
+    {{- if gt (strings.RuneCount $desc) 80 }}{{ $desc = printf "%s…" (substr $desc 0 79) }}{{ end -}}
+    {{- $filters = $filters | append (images.Text $desc (dict "color" "#cbd5e1" "size" 28 "lineSpacing" 10 "x" 70 "y" $descY "font" $regular)) -}}
+  {{- end -}}
+  {{- $featured = $base | images.Filter $filters -}}
+{{- end -}}
+{{- return $featured -}}
