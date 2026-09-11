@@ -1,0 +1,7 @@
+{{ define "main" }}
+    {{ .Content }}
+    <p class="lead">이 분류에 속한 유스케이스 {{ len .Pages }}건</p>
+    <div class="kb-grid">
+        {{ range .Pages.ByLastmod.Reverse }}{{ partial "kb/card.html" . }}{{ end }}
+    </div>
+{{ end }}

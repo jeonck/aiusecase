@@ -1,0 +1,10 @@
+{{- /*
+  캡처 이미지 한 장.
+  {{< screenshot src="02-prompt.png" alt="프롬프트 입력" caption="이렇게 입력한다" >}}
+  src 는 페이지 번들 안의 파일명이거나 /images/... 로 시작하는 경로.
+*/ -}}
+{{- partial "kb/screenshot.html" (dict
+        "page"    .Page
+        "src"     (.Get "src")
+        "alt"     (.Get "alt")
+        "caption" (.Get "caption")) -}}

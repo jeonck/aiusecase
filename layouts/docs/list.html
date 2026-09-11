@@ -1,0 +1,23 @@
+{{ define "main" }}
+    {{ .Content }}
+
+    {{ $pages := .Pages.ByWeight }}
+    {{ if $pages }}
+    <div class="kb-grid">
+        {{ range $pages }}{{ partial "kb/card.html" . }}{{ end }}
+    </div>
+    {{ else }}
+    <div class="kb-empty">
+        아직 등록된 유스케이스가 없습니다.
+        <a href="{{ "/docs/guide/contribute/" | relURL }}">유스케이스 추가하는 법</a>을 참고해 첫 사례를 올려보세요.
+    </div>
+    {{ end }}
+
+    {{ $recursive := .RegularPagesRecursive }}
+    {{ if and (gt (len $recursive) (len .RegularPages)) (eq .Params.showAll true) }}
+    <h2 class="mt-5">전체 사례 {{ len $recursive }}건</h2>
+    <div class="kb-grid">
+        {{ range $recursive.ByLastmod.Reverse }}{{ partial "kb/card.html" . }}{{ end }}
+    </div>
+    {{ end }}
+{{ end }}

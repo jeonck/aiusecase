@@ -1,0 +1,232 @@
+/* ---------------------------------------------------------------
+   AI Usecases — 지식 저장소 전용 스타일
+   LotusDocs 기본 스타일을 건드리지 않도록 모든 클래스에 kb- 접두사 사용
+   --------------------------------------------------------------- */
+
+:root {
+    --kb-accent: #2b6cb0;
+    --kb-accent-soft: rgba(43, 108, 176, .10);
+    --kb-border: rgba(0, 0, 0, .09);
+    --kb-surface: #fff;
+    --kb-muted: #64748b;
+}
+
+html[data-dark-mode="true"] {
+    --kb-accent: #7aa7e0;
+    --kb-accent-soft: rgba(122, 167, 224, .14);
+    --kb-border: rgba(255, 255, 255, .12);
+    --kb-surface: rgba(255, 255, 255, .03);
+    --kb-muted: #9aa6b8;
+}
+
+/* ---------- 메타 카드 (유스케이스 요약) ---------- */
+.kb-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: .25rem 1.5rem;
+    border: 1px solid var(--kb-border);
+    border-left: 3px solid var(--kb-accent);
+    border-radius: .5rem;
+    padding: 1rem 1.25rem;
+    margin: 0 0 1.75rem;
+    background: var(--kb-surface);
+}
+
+.kb-meta-item { padding: .35rem 0; }
+
+.kb-meta-label {
+    display: block;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--kb-muted);
+    margin-bottom: .2rem;
+}
+
+.kb-meta-value { font-size: .95rem; font-weight: 600; }
+.kb-meta-value a { text-decoration: none; }
+
+/* ---------- 배지 ---------- */
+.kb-badge {
+    display: inline-block;
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: .15rem .55rem;
+    margin: 0 .3rem .3rem 0;
+    border-radius: 999px;
+    background: var(--kb-accent-soft);
+    color: var(--kb-accent);
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+
+.kb-badge:hover { border-color: var(--kb-accent); color: var(--kb-accent); }
+.kb-badge-plain { background: transparent; border-color: var(--kb-border); color: var(--kb-muted); }
+.kb-badge-level-1 { background: rgba(16, 185, 129, .12); color: #0f9d76; }
+.kb-badge-level-2 { background: rgba(245, 158, 11, .14); color: #b45309; }
+.kb-badge-level-3 { background: rgba(239, 68, 68, .12); color: #dc2626; }
+
+html[data-dark-mode="true"] .kb-badge-level-2 { color: #f0b429; }
+html[data-dark-mode="true"] .kb-badge-level-3 { color: #f87171; }
+
+/* ---------- 단계별 사용법 ---------- */
+.kb-step {
+    position: relative;
+    display: flex;
+    gap: 1rem;
+    padding: 0 0 1.75rem 0;
+}
+
+.kb-step:not(:last-of-type)::before {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 2.35rem;
+    bottom: 0;
+    width: 2px;
+    background: var(--kb-border);
+}
+
+.kb-step-num {
+    flex: 0 0 32px;
+    height: 32px;
+    width: 32px;
+    border-radius: 50%;
+    background: var(--kb-accent);
+    color: #fff;
+    font-weight: 700;
+    font-size: .9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+}
+
+.kb-step-body { flex: 1 1 auto; min-width: 0; padding-top: .15rem; }
+
+.kb-step-title {
+    font-size: 1.08rem !important;
+    font-weight: 700;
+    margin: .2rem 0 .6rem !important;
+    padding-top: 0 !important;
+}
+
+.kb-step-body > p:last-child { margin-bottom: 0; }
+
+/* ---------- 스크린샷 ---------- */
+.kb-shot { margin: .9rem 0 .25rem; }
+
+.kb-shot img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid var(--kb-border);
+    border-radius: .5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+    display: block;
+}
+
+.kb-shot figcaption {
+    font-size: .82rem;
+    color: var(--kb-muted);
+    margin-top: .45rem;
+}
+
+.kb-shot-missing {
+    border: 1px dashed var(--kb-border);
+    border-radius: .5rem;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--kb-muted);
+    font-size: .85rem;
+    background: var(--kb-accent-soft);
+}
+
+/* ---------- 프롬프트 박스 ---------- */
+.kb-prompt {
+    border: 1px solid var(--kb-border);
+    border-radius: .5rem;
+    overflow: hidden;
+    margin: 1rem 0 1.25rem;
+}
+
+.kb-prompt-head {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .45rem .85rem;
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--kb-muted);
+    background: var(--kb-accent-soft);
+    border-bottom: 1px solid var(--kb-border);
+}
+
+.kb-prompt pre { margin: 0 !important; border-radius: 0 !important; }
+
+/* ---------- 카드 그리드 (목록 페이지) ---------- */
+.kb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.1rem;
+    margin-top: 1.5rem;
+}
+
+.kb-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--kb-border);
+    border-radius: .6rem;
+    padding: 1.1rem 1.15rem;
+    background: var(--kb-surface);
+    text-decoration: none !important;
+    color: inherit !important;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    height: 100%;
+}
+
+.kb-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--kb-accent);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .07);
+}
+
+.kb-card-icon { color: var(--kb-accent); margin-bottom: .5rem; }
+.kb-card-title { font-size: 1.02rem; font-weight: 700; margin-bottom: .35rem; }
+.kb-card-desc { font-size: .88rem; color: var(--kb-muted); margin-bottom: .7rem; flex: 1 1 auto; }
+.kb-card-foot { display: flex; flex-wrap: wrap; align-items: center; }
+
+.kb-empty {
+    border: 1px dashed var(--kb-border);
+    border-radius: .6rem;
+    padding: 2rem 1.25rem;
+    text-align: center;
+    color: var(--kb-muted);
+    margin-top: 1.5rem;
+}
+
+/* ---------- 태그/도구 인덱스 ---------- */
+.kb-termlist { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.25rem 0; padding: 0; list-style: none; }
+
+.kb-termlist a {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .4rem;
+    border: 1px solid var(--kb-border);
+    border-radius: 999px;
+    padding: .3rem .85rem;
+    text-decoration: none;
+    font-size: .9rem;
+    font-weight: 600;
+}
+
+.kb-termlist a:hover { border-color: var(--kb-accent); }
+.kb-termlist .kb-count { font-size: .78rem; color: var(--kb-muted); font-weight: 500; }
+
+@media (max-width: 575.98px) {
+    .kb-step { gap: .7rem; }
+    .kb-meta { padding: .85rem 1rem; }
+}

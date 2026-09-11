@@ -1,0 +1,13 @@
+{{- /*
+  실제로 사용한 프롬프트를 복사 가능한 박스로 보여준다.
+  {{< prompt title="요약용 프롬프트" >}}
+  다음 회의록을 3문단으로 요약해줘...
+  {{< /prompt >}}
+*/ -}}
+<div class="kb-prompt">
+    <div class="kb-prompt-head">
+        <i class="material-icons" style="font-size:1rem;">content_copy</i>
+        {{ .Get "title" | default "프롬프트" }}
+    </div>
+{{ printf "```text\n%s\n```" (trim .Inner "\n") | .Page.RenderString (dict "display" "block") }}
+</div>

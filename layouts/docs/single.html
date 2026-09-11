@@ -1,0 +1,22 @@
+{{ define "main" }}
+    {{ if .Params.usecase }}
+        {{ partial "kb/usecase-meta.html" . }}
+    {{ end }}
+    <!-- override Prism's default copy messages to 'empty'. Required by CSS styling. -->
+    <div data-prismjs-copy="" data-prismjs-copy-success="" data-prismjs-copy-error="">
+        {{ .Content }}
+    </div>
+
+    {{ if and .GitInfo .Site.Params.docs.repoURL -}}
+        {{ partial (printf "%s/%s" ($.Scratch.Get "pathName") "gitinfo") . }}
+    {{ end -}}
+
+    {{ if .Page.Store.Get "hasMermaid" }}
+    {{ $mermaid := resources.Get (printf "%s/%s" ($.Scratch.Get "pathName") "js/mermaid.min.js") }}
+    {{ if hugo.IsProduction }}{{ $mermaid = $mermaid | fingerprint "sha384" }}{{ end }}
+    <script src="{{ $mermaid.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $mermaid.Data.Integrity }}"{{ end }}></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true, logLevel: "error", align: "center", theme: "null" });
+    </script>
+    {{ end }}
+{{ end }}

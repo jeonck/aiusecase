@@ -1,0 +1,11 @@
+{{- $p := . -}}
+<a class="kb-card" href="{{ $p.RelPermalink }}">
+    <span class="kb-card-icon material-icons">{{ $p.Params.icon | default (cond $p.IsSection "folder" "article") }}</span>
+    <span class="kb-card-title">{{ $p.Title }}{{ if $p.Draft }} <span class="kb-badge kb-badge-plain">DRAFT</span>{{ end }}</span>
+    {{- with $p.Description }}<span class="kb-card-desc">{{ . | truncate (site.Params.docs.listDescTrunc | default 120) }}</span>{{ end }}
+    <span class="kb-card-foot">
+        {{- range $p.Params.tools }}<span class="kb-badge">{{ . }}</span>{{ end -}}
+        {{- with $p.Params.difficulty }}<span class="kb-badge {{ partial "kb/difficulty-class.html" . }}">{{ . }}</span>{{ end -}}
+        {{- if and $p.IsSection (gt (len $p.Pages) 0) }}<span class="kb-badge kb-badge-plain">{{ len $p.RegularPagesRecursive }}건</span>{{ end -}}
+    </span>
+</a>

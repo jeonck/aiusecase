@@ -1,0 +1,111 @@
+baseURL                 = "https://aiusecases.metacog.co.kr/"
+title                   = "AI Usecases"
+languageCode            = "ko-KR"
+defaultContentLanguage  = "ko"
+enableRobotsTXT         = true
+enableGitInfo           = true
+timeZone                = "Asia/Seoul"
+
+# 한글 제목을 URL 안전한 슬러그로 다루기 위해 명시적 slug 를 권장한다.
+# (스크립트 scripts/new-usecase.sh 가 영문 슬러그를 자동 생성한다)
+
+[markup]
+  [markup.goldmark.renderer]
+    unsafe = true
+  [markup.tableOfContents]
+    startLevel = 2
+    endLevel   = 3
+
+[taxonomies]
+  category   = "categories"
+  tag        = "tags"
+  tool       = "tools"
+  difficulty = "difficulty"
+
+[module]
+  [module.hugoVersion]
+    extended = true
+    min      = "0.140.0"
+  [[module.imports]]
+    path = "github.com/colinwilson/lotusdocs"
+  [[module.imports]]
+    path = "github.com/gohugoio/hugo-mod-bootstrap-scss/v5"
+
+[[menu.primary]]
+  name   = "지식 저장소"
+  url    = "/docs/"
+  identifier = "docs"
+  weight = 10
+[[menu.primary]]
+  name   = "카테고리"
+  url    = "/categories/"
+  identifier = "categories"
+  weight = 20
+[[menu.primary]]
+  name   = "도구별"
+  url    = "/tools/"
+  identifier = "tools"
+  weight = 30
+[[menu.primary]]
+  name   = "유스케이스 추가"
+  url    = "/docs/guide/contribute/"
+  identifier = "contribute"
+  weight = 40
+
+[params]
+  google_fonts = [
+    ["Inter", "300, 400, 600, 700"],
+    ["Fira Code", "500, 700"]
+  ]
+  sans_serif_font  = "Inter"
+  secondary_font   = "Inter"
+  mono_font        = "Fira Code"
+  description      = "실제로 써본 AI 활용 사례를 캡처 이미지와 단계별 사용법으로 정리하고 카테고리로 분류해 축적하는 지식 저장소"
+  images           = ["images/og-default.png"]
+
+  [params.footer]
+    copyright = "© :YEAR: AI Usecases · metacog.co.kr"
+
+  [params.social]
+    github = "jeonck/aiusecase"
+
+  [params.docs]
+    title             = "AI Usecases"
+    pathName          = "docs"
+    themeColor        = "blue"
+    darkMode          = true
+    prism             = true
+    prismTheme        = "lotusdocs"
+    logoLinkURL       = "/"
+    titleIcon         = true
+    sidebarIcons      = true
+    breadcrumbs       = true
+    backToTop         = true
+    toc               = true
+    tocMobile         = true
+    scrollSpy         = true
+    descriptions      = true
+    navDesc           = true
+    navDescTrunc      = 40
+    listDescTrunc     = 120
+    intLinkTooltip    = true
+    extLinkNewTab     = true
+    lastMod           = true
+    lastModRelative   = true
+    useLastmodTime    = true
+    editPage          = true
+    repoURL           = "https://github.com/jeonck/aiusecase"
+    repoBranch        = "main"
+
+  [params.flexsearch]
+    enabled             = true
+    tokenize            = "forward"
+    optimize            = true
+    cache               = 100
+    minQueryChar        = 2
+    maxResult           = 8
+    searchSectionsIndex = ["docs"]
+
+  [params.render_hooks.link]
+    errorLevel      = "warning"
+    highlightBroken = false

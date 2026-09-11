@@ -1,0 +1,43 @@
+{{- /* 유스케이스 페이지 상단 요약 카드. front matter 에서 자동으로 만들어진다. */ -}}
+{{- $p := . -}}
+<div class="kb-meta">
+    {{- with $p.Params.categories }}
+    <div class="kb-meta-item">
+        <span class="kb-meta-label">카테고리</span>
+        <span class="kb-meta-value">
+            {{- range . }}<a class="kb-badge" href="{{ (printf "/categories/%s/" (urlize .)) | relURL }}">{{ . }}</a>{{ end -}}
+        </span>
+    </div>
+    {{- end }}
+    {{- with $p.Params.tools }}
+    <div class="kb-meta-item">
+        <span class="kb-meta-label">사용 도구</span>
+        <span class="kb-meta-value">
+            {{- range . }}<a class="kb-badge" href="{{ (printf "/tools/%s/" (urlize .)) | relURL }}">{{ . }}</a>{{ end -}}
+        </span>
+    </div>
+    {{- end }}
+    {{- with $p.Params.difficulty }}
+    <div class="kb-meta-item">
+        <span class="kb-meta-label">난이도</span>
+        <span class="kb-meta-value">
+            <a class="kb-badge {{ partial "kb/difficulty-class.html" . }}" href="{{ (printf "/difficulty/%s/" (urlize .)) | relURL }}">{{ . }}</a>
+        </span>
+    </div>
+    {{- end }}
+    {{- with $p.Params.duration }}
+    <div class="kb-meta-item">
+        <span class="kb-meta-label">소요 시간</span>
+        <span class="kb-meta-value">{{ . }}</span>
+    </div>
+    {{- end }}
+    {{- with $p.Lastmod }}
+    <div class="kb-meta-item">
+        <span class="kb-meta-label">최종 업데이트</span>
+        <span class="kb-meta-value">{{ .Format "2006-01-02" }}</span>
+    </div>
+    {{- end }}
+</div>
+{{- with $p.Params.tags }}
+<p class="mb-4">{{ range . }}<a class="kb-badge kb-badge-plain" href="{{ (printf "/tags/%s/" (urlize .)) | relURL }}">#{{ . }}</a>{{ end }}</p>
+{{- end }}

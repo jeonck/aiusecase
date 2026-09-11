@@ -1,0 +1,25 @@
+{{- /*
+  단계별 사용법 한 단계를 렌더링한다.
+
+  {{< step title="Claude 열기" image="01-open.png" caption="첫 화면" >}}
+  단계 설명 (마크다운)
+  {{< /step >}}
+
+  n 을 생략하면 페이지 안에서 자동으로 1, 2, 3... 번호가 매겨진다.
+*/ -}}
+{{- $n := .Get "n" -}}
+{{- if not $n -}}
+    {{- $c := add (int (.Page.Store.Get "kbStepCount" | default 0)) 1 -}}
+    {{- .Page.Store.Set "kbStepCount" $c -}}
+    {{- $n = string $c -}}
+{{- end -}}
+<div class="kb-step">
+    <div class="kb-step-num">{{ $n }}</div>
+    <div class="kb-step-body">
+        {{- with .Get "title" }}<h3 class="kb-step-title">{{ . | markdownify }}</h3>{{ end }}
+        {{- with .Inner }}{{ . | markdownify }}{{ end }}
+        {{- with $.Get "image" }}
+            {{- partial "kb/screenshot.html" (dict "page" $.Page "src" . "alt" ($.Get "alt" | default ($.Get "title")) "caption" ($.Get "caption")) }}
+        {{- end }}
+    </div>
+</div>

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" width="900" height="300" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif" role="img" aria-label="Gmail 메일에서 Ask Gemini로 구글 캘린더 일정을 추가하는 흐름">
+  <rect width="900" height="300" fill="#f8fafc"/>
+
+  <!-- panel 1 -->
+  <rect x="24" y="40" width="240" height="200" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="24" y="40" width="240" height="30" rx="10" fill="#e2e8f0"/>
+  <rect x="24" y="60" width="240" height="10" fill="#e2e8f0"/>
+  <text x="40" y="61" font-size="13" font-weight="700" fill="#334155">메일함</text>
+  <rect x="40" y="88" width="150" height="11" rx="3" fill="#94a3b8"/>
+  <rect x="40" y="110" width="196" height="8" rx="3" fill="#cbd5e1"/>
+  <rect x="40" y="128" width="176" height="8" rx="3" fill="#cbd5e1"/>
+  <rect x="40" y="152" width="208" height="66" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="52" y="174" font-size="11" fill="#475569">When: Tue, Sep 22, 9:00 AM</text>
+  <text x="52" y="192" font-size="11" fill="#475569">Where: Online</text>
+  <text x="52" y="210" font-size="11" fill="#94a3b8">행사 등록 확인 메일</text>
+  <text x="144" y="266" font-size="13" font-weight="700" fill="#334155" text-anchor="middle">1. 메일 열기</text>
+
+  <!-- arrow 1 -->
+  <path d="M276 140 h48" stroke="#2b6cb0" stroke-width="2.5" fill="none"/>
+  <path d="M324 140 l-9 -6 v12 z" fill="#2b6cb0"/>
+
+  <!-- panel 2 -->
+  <rect x="336" y="40" width="240" height="200" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="336" y="40" width="240" height="30" rx="10" fill="#e2e8f0"/>
+  <rect x="336" y="60" width="240" height="10" fill="#e2e8f0"/>
+  <text x="352" y="61" font-size="13" font-weight="700" fill="#334155">AI 사이드 패널</text>
+  <rect x="404" y="86" width="158" height="26" rx="13" fill="#dbeafe"/>
+  <text x="483" y="103" font-size="11" fill="#1e40af" text-anchor="middle">현재 일정을 캘린더에 추가</text>
+  <rect x="352" y="124" width="210" height="70" rx="8" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <rect x="364" y="136" width="130" height="9" rx="3" fill="#64748b"/>
+  <rect x="364" y="152" width="104" height="8" rx="3" fill="#cbd5e1"/>
+  <rect x="364" y="170" width="88" height="16" rx="8" fill="#e2e8f0"/>
+  <text x="408" y="182" font-size="10" fill="#475569" text-anchor="middle">Cancel</text>
+  <rect x="460" y="170" width="90" height="16" rx="8" fill="#2b6cb0"/>
+  <text x="505" y="182" font-size="10" fill="#ffffff" text-anchor="middle">Add Event</text>
+  <text x="456" y="266" font-size="13" font-weight="700" fill="#334155" text-anchor="middle">2. 요청 → 일정 카드 확인</text>
+
+  <!-- arrow 2 -->
+  <path d="M588 140 h48" stroke="#2b6cb0" stroke-width="2.5" fill="none"/>
+  <path d="M636 140 l-9 -6 v12 z" fill="#2b6cb0"/>
+
+  <!-- panel 3 -->
+  <rect x="648" y="40" width="228" height="200" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <rect x="648" y="40" width="228" height="30" rx="10" fill="#e2e8f0"/>
+  <rect x="648" y="60" width="228" height="10" fill="#e2e8f0"/>
+  <text x="664" y="61" font-size="13" font-weight="700" fill="#334155">캘린더</text>
+  <circle cx="684" cy="104" r="13" fill="#dcfce7"/>
+  <path d="M678 104 l4 4 l8 -9" stroke="#16a34a" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="706" y="109" font-size="12" font-weight="600" fill="#166534">일정 추가 완료</text>
+  <rect x="664" y="132" width="196" height="62" rx="6" fill="#f1f5f9" stroke="#e2e8f0"/>
+  <text x="676" y="154" font-size="11" fill="#475569">일시: 9/22(화) 09:00~17:00</text>
+  <text x="676" y="172" font-size="11" fill="#475569">장소: 온라인 (참여 링크)</text>
+  <text x="676" y="188" font-size="10" fill="#94a3b8">※ 표시 시간대 확인 필요</text>
+  <text x="762" y="266" font-size="13" font-weight="700" fill="#334155" text-anchor="middle">3. 캘린더에 반영</text>
+</svg>
