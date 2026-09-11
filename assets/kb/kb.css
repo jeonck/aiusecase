@@ -229,4 +229,6 @@ html[data-dark-mode="true"] .kb-badge-level-3 { color: #f87171; }
 @media (max-width: 575.98px) {
     .kb-step { gap: .7rem; }
     .kb-meta { padding: .85rem 1rem; }
+    /* 좁은 화면에서는 캡처가 번호 칸 들여쓰기를 무시하고 본문 폭을 다 쓴다 */
+    .kb-step .kb-shot { margin-left: calc(-32px - .7rem); }
 }
