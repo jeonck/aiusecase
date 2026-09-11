@@ -208,6 +208,24 @@ html[data-dark-mode="true"] .kb-badge-level-3 { color: #f87171; }
     margin-top: 1.5rem;
 }
 
+/* ---------- 목록 필터 ---------- */
+.kb-filter { margin-top: 1rem; display: flex; flex-direction: column; gap: .5rem; }
+.kb-filter-search {
+    width: 100%; max-width: 420px; padding: .5rem .8rem; font-size: .95rem;
+    border: 1px solid var(--kb-border); border-radius: .5rem; background: var(--kb-surface); color: inherit;
+}
+.kb-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.kb-filter-label { font-size: .8rem; font-weight: 700; color: var(--kb-muted); margin-right: .2rem; }
+.kb-chip {
+    border: 1px solid var(--kb-border); border-radius: 999px; background: var(--kb-surface); color: inherit;
+    padding: .25rem .75rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+}
+.kb-chip:hover { border-color: var(--kb-accent); }
+.kb-chip.is-on { background: var(--kb-accent); border-color: var(--kb-accent); color: #fff; }
+.kb-chip.is-on .kb-count { color: rgba(255,255,255,.8); }
+.kb-chip .kb-count { font-size: .75rem; color: var(--kb-muted); font-weight: 500; }
+.kb-chip-reset { border-style: dashed; }
+
 /* ---------- 태그/도구 인덱스 ---------- */
 .kb-termlist { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.25rem 0; padding: 0; list-style: none; }
 

@@ -15,9 +15,67 @@
 
     {{ $recursive := .RegularPagesRecursive }}
     {{ if and (gt (len $recursive) (len .RegularPages)) (eq .Params.showAll true) }}
-    <h2 class="mt-5">전체 사례 {{ len $recursive }}건</h2>
-    <div class="kb-grid">
+    <h2 class="mt-5">전체 사례 <span id="kb-count">{{ len $recursive }}</span>건</h2>
+    {{- /* 필터 바: 난이도 3종 + 도구(빈도순) + 검색. 카드의 data-* 속성을 클라이언트에서 거른다 */ -}}
+    {{- $tools := dict -}}
+    {{- range $recursive }}{{ range .Params.tools }}{{ $tools = merge $tools (dict . (add (index $tools . | default 0) 1)) }}{{ end }}{{ end -}}
+    <div class="kb-filter" id="kb-filter">
+        <input type="search" class="kb-filter-search" placeholder="제목·설명·태그 검색" aria-label="사례 검색">
+        <div class="kb-filter-row">
+            <span class="kb-filter-label">난이도</span>
+            {{ range slice "초급" "중급" "고급" }}<button type="button" class="kb-chip" data-kind="difficulty" data-value="{{ . }}">{{ . }}</button>{{ end }}
+        </div>
+        <div class="kb-filter-row">
+            <span class="kb-filter-label">도구</span>
+            {{- $list := slice -}}
+            {{- range $name, $n := $tools }}{{ $list = $list | append (dict "name" $name "n" $n) }}{{ end -}}
+            {{ range first 12 (sort $list "n" "desc") }}<button type="button" class="kb-chip" data-kind="tool" data-value="{{ .name }}">{{ .name }} <span class="kb-count">{{ .n }}</span></button>{{ end }}
+            <button type="button" class="kb-chip kb-chip-reset" id="kb-filter-reset" hidden>초기화</button>
+        </div>
+    </div>
+    <div class="kb-grid" id="kb-all">
         {{ range $recursive.ByLastmod.Reverse }}{{ partial "kb/card.html" . }}{{ end }}
     </div>
+    <div class="kb-empty" id="kb-none" hidden>조건에 맞는 사례가 없습니다.</div>
+    <script>
+    (function () {
+        var root = document.getElementById('kb-filter'); if (!root) return;
+        var cards = Array.prototype.slice.call(document.querySelectorAll('#kb-all .kb-card'));
+        var search = root.querySelector('.kb-filter-search');
+        var reset = document.getElementById('kb-filter-reset');
+        var state = { difficulty: null, tools: [], q: '' };
+        function apply() {
+            var n = 0, q = state.q.trim().toLowerCase();
+            cards.forEach(function (c) {
+                var ok = (!state.difficulty || c.dataset.difficulty === state.difficulty)
+                    && state.tools.every(function (t) { return c.dataset.tools.split('|').indexOf(t) >= 0; })
+                    && (!q || c.dataset.text.toLowerCase().indexOf(q) >= 0);
+                c.hidden = !ok; if (ok) n++;
+            });
+            document.getElementById('kb-count').textContent = n;
+            document.getElementById('kb-none').hidden = n > 0;
+            reset.hidden = !(state.difficulty || state.tools.length || q);
+        }
+        root.addEventListener('click', function (e) {
+            var b = e.target.closest('.kb-chip'); if (!b) return;
+            if (b.id === 'kb-filter-reset') {
+                state = { difficulty: null, tools: [], q: '' }; search.value = '';
+                root.querySelectorAll('.kb-chip.is-on').forEach(function (x) { x.classList.remove('is-on'); });
+                return apply();
+            }
+            var v = b.dataset.value;
+            if (b.dataset.kind === 'difficulty') {
+                var on = state.difficulty === v; state.difficulty = on ? null : v;
+                root.querySelectorAll('[data-kind=difficulty]').forEach(function (x) { x.classList.toggle('is-on', x === b && !on); });
+            } else {
+                var i = state.tools.indexOf(v);
+                if (i >= 0) state.tools.splice(i, 1); else state.tools.push(v);
+                b.classList.toggle('is-on', i < 0);
+            }
+            apply();
+        });
+        search.addEventListener('input', function () { state.q = search.value; apply(); });
+    })();
+    </script>
     {{ end }}
 {{ end }}

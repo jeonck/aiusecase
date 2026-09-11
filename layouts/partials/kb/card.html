@@ -1,5 +1,5 @@
 {{- $p := . -}}
-<a class="kb-card" href="{{ $p.RelPermalink }}">
+<a class="kb-card" href="{{ $p.RelPermalink }}" data-difficulty="{{ $p.Params.difficulty }}" data-tools="{{ delimit ($p.Params.tools | default slice) "|" }}" data-text="{{ $p.Title }} {{ $p.Description }} {{ delimit ($p.Params.tags | default slice) " " }}">
     <span class="kb-card-icon material-icons">{{ $p.Params.icon | default (cond $p.IsSection "folder" "article") }}</span>
     <span class="kb-card-title">{{ $p.Title }}{{ if $p.Draft }} <span class="kb-badge kb-badge-plain">DRAFT</span>{{ end }}</span>
     {{- with $p.Description }}<span class="kb-card-desc">{{ . | truncate (site.Params.docs.listDescTrunc | default 120) }}</span>{{ end }}
