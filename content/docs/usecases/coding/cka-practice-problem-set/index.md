@@ -20,7 +20,7 @@ CKA 연습의 어려움은 문제가 아니라 **채점**입니다. 풀고 나�
 [앞 사례의 cka 클러스터]({{< relref "/docs/usecases/coding/cka-practice-cluster-kind-calico" >}}) 위에서 Claude Code 가 세 가지를 만들었습니다.
 
 - `setup.sh` — 네임스페이스를 초기화하고 고장 시나리오 3개를 심는다 (이미지 태그 오타, Service selector 불일치, worker2 kubelet 중지)
-- `problems.md` — 12문제. 시험 커리큘럼 5영역(아키텍처·워크로드·네트워킹·스토리지·트러블슈팅)
+- `problems.txt` — 12문제. 시험 커리큘럼 5영역(아키텍처·워크로드·네트워킹·스토리지·트러블슈팅)
 - `check.sh` — 문제마다 **결과**를 검사해 PASS/FAIL. readyReplicas, endpoint 수, wget 성공/타임아웃, `can-i`, 파일 내용
 
 그리고 모범 답안을 직접 풀어 12/12 를 확인했습니다 — 첫 시도는 8/12 였고, 그 실패가 이 세트의 가장 중요한 교훈이 됐습니다.
@@ -29,7 +29,7 @@ CKA 연습의 어려움은 문제가 아니라 **채점**입니다. 풀고 나�
 
 - [cka 클러스터]({{< relref "/docs/usecases/coding/cka-practice-cluster-kind-calico" >}}) (worker 2 + Calico). NetworkPolicy 문제(Q6)는 Calico 없이는 채점이 안 됩니다
 - `export KIND_EXPERIMENTAL_PROVIDER=podman`
-- 파일 5개를 한 폴더에: [setup.sh](setup.sh) · [problems.md](problems.md) · [check.sh](check.sh) · [solutions.sh](solutions.sh) · [solutions.md](solutions.md)
+- 파일 5개를 한 폴더에: [setup.sh](setup.sh) · [problems.txt](problems.txt) · [check.sh](check.sh) · [solutions.sh](solutions.sh) · [solutions.txt](solutions.txt)
 
 ## 단계별 사용법
 
@@ -43,7 +43,7 @@ cka 시험 유형별 연습 문제 세트도 유스케이스로 작성
 ./check.sh      # 11 FAIL — 이 상태에서 시작
 ```
 
-12문제 요약 ([problems.md](problems.md) 전문):
+12문제 요약 ([problems.txt](problems.txt) 전문):
 
 | # | 영역 | 문제 |
 | --- | --- | --- |
@@ -83,7 +83,7 @@ podman exec cka-worker2 systemctl start kubelet      # 시험: ssh cka-worker2 �
 
 check.sh 가 보는 것은 정답 YAML 이 아니라 결과입니다. 예를 들어 Q6 은 라벨 있는 busybox 와 없는 busybox 로 실제 `wget` 을 쏴서 하나는 응답, 하나는 `timed out` 이어야 PASS. Q9 는 `kubectl auth can-i` 네 번. Q7 은 파드 안의 파일 내용. 어떤 방법으로 풀든(명령형·YAML·nodeName·nodeSelector) 결과가 맞으면 통과합니다.
 
-풀이 노트는 [solutions.md](solutions.md) — 문제마다 시험장에서 떠올릴 명령 한 줄과 함정.
+풀이 노트는 [solutions.txt](solutions.txt) — 문제마다 시험장에서 떠올릴 명령 한 줄과 함정.
 {{< /step >}}
 
 ## 결과
@@ -97,7 +97,7 @@ check.sh 가 보는 것은 정답 YAML 이 아니라 결과입니다. 예를 들
 | 첫 시도 | 8/12 — 순서 교훈 |
 | 초기화 | `./setup.sh` 로 몇 번이고 |
 
-40분 목표로 풀고 `./check.sh`, 틀린 것만 `solutions.md` 보고 다시. 세트를 다 맞히면 `setup.sh` 의 고장 시나리오를 바꿔서(다른 오타, 다른 네임스페이스, PVC accessMode 불일치) 새 세트를 만들면 됩니다 — Claude 에게 "고장 시나리오 3개 더" 라고 하면 됩니다.
+40분 목표로 풀고 `./check.sh`, 틀린 것만 `solutions.txt` 보고 다시. 세트를 다 맞히면 `setup.sh` 의 고장 시나리오를 바꿔서(다른 오타, 다른 네임스페이스, PVC accessMode 불일치) 새 세트를 만들면 됩니다 — Claude 에게 "고장 시나리오 3개 더" 라고 하면 됩니다.
 
 ## 주의사항
 

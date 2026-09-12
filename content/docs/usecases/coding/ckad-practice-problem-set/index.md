@@ -22,7 +22,7 @@ CKAD 는 CKA 보다 **파드 안쪽**을 봅니다 — 사이드카, Job/CronJob
 ## 사전 준비
 
 - [cka 클러스터]({{< relref "/docs/usecases/coding/cka-practice-cluster-kind-calico" >}}) + `helm`
-- 파일 5개: [setup.sh](setup.sh) · [problems.md](problems.md) · [check.sh](check.sh) · [solutions.sh](solutions.sh) · [solutions.md](solutions.md)
+- 파일 5개: [setup.sh](setup.sh) · [problems.txt](problems.txt) · [check.sh](check.sh) · [solutions.sh](solutions.sh) · [solutions.txt](solutions.txt)
 - CKA 세트를 돌린 뒤라면 `cka-worker2` 의 kubelet 이 꺼져 있을 수 있습니다. setup.sh 가 먼저 켭니다 (아래 사고 참조)
 
 ## 단계별 사용법
@@ -37,7 +37,7 @@ setup.sh 는 네임스페이스 `ckad`, `ckad-helm`, `quota-ns` 를 초기화하
 - Q8 용 `crasher` 파드 — 시작하자마자 `config file … not found` 를 찍고 exit 1 → CrashLoopBackOff
 - Q6 용 로컬 Helm 차트 `./mychart` (helm create 뼈대)
 
-12문제 ([problems.md](problems.md) 전문):
+12문제 ([problems.txt](problems.txt) 전문):
 
 | # | 영역 | 문제 |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ podman exec cka-worker2 systemctl start kubelet     # 30초 뒤 Terminating 정�
 - Q8 — `crasher` 가 `Running` 이고 컨테이너 ready
 - Q11 — 파드 안에서 `ls /var/run/secrets/kubernetes.io/serviceaccount` 가 **비어 있어야** PASS. `automountServiceAccountToken: false` 를 SA 에 걸었는지 파드에 걸었는지는 안 봅니다
 
-풀이 노트는 [solutions.md](solutions.md). 각 문제의 함정 한 줄: Job 은 `create job` 으로 completions 를 못 준다, securityContext 는 파드 레벨과 컨테이너 레벨 위치가 다르다, 쿼터가 requests.cpu 를 걸면 requests 없는 파드는 거부된다 …
+풀이 노트는 [solutions.txt](solutions.txt). 각 문제의 함정 한 줄: Job 은 `create job` 으로 completions 를 못 준다, securityContext 는 파드 레벨과 컨테이너 레벨 위치가 다르다, 쿼터가 requests.cpu 를 걸면 requests 없는 파드는 거부된다 …
 {{< /step >}}
 
 ## 결과
