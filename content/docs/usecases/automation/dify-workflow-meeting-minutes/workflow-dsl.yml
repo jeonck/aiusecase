@@ -1,0 +1,132 @@
+app:
+  description: 회의록 텍스트를 넣으면 요약·결정사항·액션아이템(담당자·기한)을 JSON 으로 돌려준다
+  icon: 📝
+  icon_background: '#E0F2FE'
+  icon_type: emoji
+  mode: workflow
+  name: 회의록 정리 워크플로
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:1.0.5@51583313a5988d5dca405063831ffeeacdc1f2e95f32a8c10b4c281ceef39ebb
+    version: null
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data: { isInIteration: false, isInLoop: false, sourceType: start, targetType: llm }
+      id: start-llm
+      source: start
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: { isInIteration: false, isInLoop: false, sourceType: llm, targetType: end }
+      id: llm-end
+      source: llm
+      sourceHandle: source
+      target: end
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 시작
+        type: start
+        variables:
+        - label: 회의록 원문
+          max_length: 20000
+          options: []
+          required: true
+          type: paragraph
+          variable: minutes
+        - label: 팀 이름
+          max_length: 48
+          options: []
+          required: false
+          type: text-input
+          variable: team
+      height: 116
+      id: start
+      position: { x: 80, y: 282 }
+      positionAbsolute: { x: 80, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        model:
+          completion_params:
+            temperature: 0.2
+          mode: chat
+          name: gpt-5
+          provider: langgenius/openai/openai
+        prompt_template:
+        - id: sys-1
+          role: system
+          text: '너는 회의록 정리 담당이다. 입력된 회의록에서 사실만 뽑는다. 추측하지 않는다. 반드시 아래 JSON 스키마로만 답한다(코드블록·설명 없이 JSON 만): {"team": string, "summary": string(3문장 이내), "decisions": [string], "action_items": [{"owner": string, "task": string, "due": string|null}], "open_questions": [string]}. 담당자·기한이 회의록에 없으면 null.'
+        - id: usr-1
+          role: user
+          text: '팀: {{#start.team#}}
+
+            회의록:
+            {{#start.minutes#}}'
+        selected: false
+        title: 회의록 → JSON
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm
+      position: { x: 380, y: 282 }
+      positionAbsolute: { x: 380, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    - data:
+        outputs:
+        - value_selector: [llm, text]
+          variable: result
+        selected: false
+        title: 종료
+        type: end
+      height: 90
+      id: end
+      position: { x: 680, y: 282 }
+      positionAbsolute: { x: 680, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    viewport: { x: 0, y: 0, zoom: 1 }
