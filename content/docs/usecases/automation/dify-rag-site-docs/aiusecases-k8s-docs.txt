@@ -1,0 +1,734 @@
+# 로컬 k8s 개발 환경 3분 — kind + Podman으로 클러스터·Ingress·로컬 이미지 배포까지
+
+
+## 어떤 문제를 해결하나
+
+"로컬에 k8s 하나 띄워서 테스트하고 싶다" 는 늘 미뤄지는 일입니다. 도구는 많고(kind, minikube, k3d, Docker Desktop 내장), 문서 URL 은 죽어 있고, Ingress 가 localhost 로 안 붙어서 한두 시간 날리기 딱 좋습니다.
+
+이 Mac 에는 Docker Desktop 이 없고 **Podman machine** 만 돕니다. Claude Code 에 "로컬 k8s 테스트 환경 만들어 줘" 라고 하면 설치된 도구를 확인하고(kind, kubectl, helm, podman 있음 / minikube, k3d, docker 데몬 없음) 그에 맞는 경로로 갑니다.
+결과: **2분 43초** 만에 2노드 클러스터 + Ingress + 로컬 빌드 이미지 배포. 중간에 두 번 막혔고, 둘 다 Claude 가 원인을 찾아 고쳤습니다.
+
+## 사전 준비
+
+- `brew install kind kubectl` (있었음). `podman machine` 이 실행 중일 것 (`podman machine list`)
+- Docker 데몬이 없으면 `KIND_EXPERIMENTAL_PROVIDER=podman`. 이 환경변수 없이 `kind` 를 부르면 `docker.sock` 을 찾다가 실패합니다
+- 메모리: Podman machine 6GiB 로 control-plane + worker + ingress + 앱 3개가 넉넉히 돕니다
+
+## 단계별 사용법
+
+
+### 클러스터 정의를 파일로 쓰고 22초에 띄운다
+
+[프롬프트]
+개발을 위한 인프라 환경으로 로컬형 k8s테스트 환경 구축 유스케이스 작성 가능할까?
+
+
+Claude 가 쓴 [kind-dev.yaml](kind-dev.yaml):
+
+```yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: dev
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"     # Ingress 컨트롤러를 이 노드에 붙이기 위한 라벨
+    extraPortMappings:
+      - { containerPort: 80,  hostPort: 8080, protocol: TCP }   # 호스트 80 은 권한 문제로 8080
+      - { containerPort: 443, hostPort: 8443, protocol: TCP }
+  - role: worker
+```
+
+```bash
+export KIND_EXPERIMENTAL_PROVIDER=podman
+kind create cluster --config kind-dev.yaml     # 22초 (노드 이미지 캐시 있을 때)
+```
+
+worker 를 하나 둔 이유: 파드가 control-plane 이 아닌 노드에 뜨는 걸 봐야 "스케줄링" 이 보입니다. 바로 다음 단계에서 그게 문제가 됩니다.
+
+
+
+### Ingress를 붙이다 두 번 막히고, 두 번 고친다
+
+**첫 번째 벽 — 문서의 manifest URL 이 404.** kind 공식 문서가 가리키는 `kubernetes.github.io/ingress-nginx/…/kind/deploy.yaml` 이 죽어 있습니다. 같은 파일을 GitHub raw 로 받아 적용합니다.
+
+```bash
+curl -sSfL -o ingress-nginx-kind.yaml \
+  https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+kubectl apply -f ingress-nginx-kind.yaml
+```
+
+**두 번째 벽 — 앱을 올렸는데 `localhost:8080` 이 응답 없음.** Claude 의 진단 순서:
+
+1. `podman ps` — 포트 매핑은 `dev-control-plane` 에 있음 ✓
+2. `kubectl -n ingress-nginx get pods -o wide` — 컨트롤러 파드가 **`dev-worker`** 에 떠 있음 ✗
+3. 컨트롤러 Deployment 의 nodeSelector 확인 — `kubernetes.io/os: linux` 뿐. 최신 manifest 에서 `ingress-ready` 선택자가 빠져 있음
+
+호스트 포트는 control-plane 컨테이너에만 뚫려 있는데 컨트롤러는 worker 에서 80 을 열고 있으니 연결될 리 없습니다. 컨트롤러를 control-plane 에 고정하고 taint 를 허용합니다.
+
+```bash
+kubectl -n ingress-nginx patch deploy ingress-nginx-controller --type=merge -p '{"spec":{"template":{"spec":{
+  "nodeSelector":{"ingress-ready":"true","kubernetes.io/os":"linux"},
+  "tolerations":[{"key":"node-role.kubernetes.io/control-plane","operator":"Equal","effect":"NoSchedule"}]}}}}'
+```
+
+재배포 뒤 `curl localhost:8080` 네 번 → 파드 두 개가 번갈아 응답합니다.
+
+
+
+### 샘플 앱으로 라운드로빈을 눈으로 본다
+
+[app.yaml](app.yaml) — `traefik/whoami` 2 replicas + Service + Ingress(`/`). 리소스 requests/limits 를 붙여 두면 나중에 HPA·리소스 쿼터 실험을 그대로 이어 갈 수 있습니다.
+
+```bash
+kubectl apply -f app.yaml
+kubectl -n demo rollout status deploy/whoami
+for i in 1 2 3 4; do curl -s http://localhost:8080/ | grep ^Hostname; done
+```
+
+
+
+### 로컬에서 빌드한 이미지를 레지스트리 없이 배포한다
+
+로컬 k8s 의 진짜 용도는 **내 코드를 이미지로 만들어 올려 보는 것**입니다. 레지스트리에 푸시하지 않고 노드에 직접 넣습니다.
+
+```bash
+hugo -b http://aiusecases.localtest.me:8080/ -d site         # 이 사이트를 빌드
+podman build -q -t aiusecases:dev .                          # FROM nginx:1.27-alpine + COPY site/
+podman save aiusecases:dev -o aiusecases-dev.tar
+kind load image-archive aiusecases-dev.tar --name dev        # Docker 면 kind load docker-image
+kubectl apply -f site.yaml
+```
+
+[site.yaml](site.yaml) 에서 빠뜨리면 안 되는 두 줄:
+
+```yaml
+image: localhost/aiusecases:dev     # podman 은 이미지 이름 앞에 localhost/ 를 붙인다
+imagePullPolicy: Never              # 없으면 docker.io 에서 pull 하려다 ErrImagePull
+```
+
+Ingress 는 host 기반(`aiusecases.localtest.me`)으로 뒀습니다. `*.localtest.me` 는 공개 DNS 가 127.0.0.1 로 풀어 주는 도메인이라 `/etc/hosts` 를 안 건드립니다.
+
+
+
+### 브라우저로 확인한다
+
+```bash
+curl -s http://aiusecases.localtest.me:8080/docs/usecases/ | grep -o '<title>[^<]*</title>' | head -1
+# <title>유스케이스 | AI Usecases</title>
+```
+
+여기서부터가 개발 루프입니다: 코드 수정 → `podman build` → `kind load` → `kubectl rollout restart deploy/aiusecases` → 새로고침. 레지스트리·CI 없이 10초 안에 돕니다.
+
+
+## 결과
+
+| 단계 | 시각 | 누적 |
+| --- | --- | --- |
+| 도구 확인 + 클러스터 정의 + 생성 | 16:54:49 → 16:55:11 | 22초 |
+| ingress-nginx (404 우회 포함) | → 16:56:02 | 1분 13초 |
+| 앱 배포 + '응답 없음' 진단·수정 | → 16:57:01 | 2분 12초 |
+| 로컬 이미지 빌드·적재·배포·확인 | → 16:57:32 | **2분 43초** |
+
+사람이 문서 보며 하면 첫 벽(404)에서 검색 10분, 둘째 벽(포트 매핑 vs 스케줄링)에서 30분 — 이 두 벽이 이 작업의 전부입니다. Claude 가 빨랐던 건 명령을 빨리 쳐서가 아니라 **`podman ps` 와 `get pods -o wide` 를 나란히 놓고 노드 불일치를 본 것**입니다.
+
+정리는 `kind delete cluster --name dev` 한 줄. 컨테이너 두 개가 사라지고 끝입니다.
+
+## 주의사항
+
+- **`KIND_EXPERIMENTAL_PROVIDER=podman` 을 셸 프로필에 넣으세요.** 빼먹으면 `kind get clusters` 조차 docker.sock 오류로 실패해 "클러스터가 사라졌나" 하고 당황합니다.
+- **호스트 80 대신 8080.** macOS 에서 1024 이하 포트 매핑은 권한 문제가 생깁니다. `extraPortMappings` 의 `hostPort` 를 8080/8443 으로.
+- **ingress-nginx 의 kind 전용 manifest 는 nodeSelector 가 바뀔 수 있습니다.** 적용 후 반드시 컨트롤러가 포트 매핑이 있는 노드(control-plane)에 떴는지 `get pods -o wide` 로 확인하세요. 단일 노드 클러스터면 이 문제가 안 보이지만, worker 를 두는 순간 나타납니다.
+- **Podman 이미지는 `localhost/` 접두어.** `podman build -t foo:dev` 하면 실제 이름은 `localhost/foo:dev` 입니다. manifest 에 그대로 써야 `imagePullPolicy: Never` 가 찾습니다.
+- **`kind load docker-image` 는 Docker 전용.** Podman 은 `podman save` → `kind load image-archive` 두 단계입니다.
+- 이 환경은 **테스트용**입니다. 데이터는 노드 컨테이너 안에 있어 `kind delete` 하면 사라집니다. 영속 데이터 실험은 `extraMounts` 로 호스트 디렉터리를 붙이세요.
+
+## 응용
+
+- 같은 `kind-dev.yaml` 에 worker 를 하나 더 → 노드 장애(`podman stop dev-worker2`) 시 파드 재스케줄링 실험
+- Helm 차트 개발: `helm install --dry-run` 이 아니라 실제 클러스터에 넣고 `kubectl get events -w` 로 보기
+- CI 에서 같은 구성으로 e2e 테스트 (GitHub Actions 의 `helm/kind-action`)
+- 이 사이트처럼 정적 사이트를 파드로 띄워 **Ingress 경로·헤더·리다이렉트 규칙**을 배포 전에 검증
+
+
+# Helm 차트 배포 테스트 — install·test·upgrade·실패·rollback을 로컬 kind에서 2분에
+
+
+## 어떤 문제를 해결하나
+
+Helm 차트는 "values 만 바꾸면 되는 배포 단위" 인데, 실제로 그 차트가 **업그레이드와 롤백에서 어떻게 동작하는지**는 프로덕션에서 처음 겪는 팀이 많습니다. 실패한 업그레이드가 서비스를 끊는지, 롤백이 정말 이전 상태로 돌아오는지, `helm test` 가 뭘 검증하는지.
+
+[로컬 kind 클러스터](/docs/usecases/coding/local-k8s-dev-env-kind-podman)가 있으면 이걸 2분에 한 바퀴 돌 수 있습니다. Claude Code 에 "helm 차트 배포 테스트" 라고 하면 차트 생성부터 롤백 확인까지 명령과 결과를 남깁니다.
+
+## 사전 준비
+
+- 앞 사례의 kind 클러스터 (`kind-dev`) + ingress-nginx + `localhost/aiusecases:dev` 이미지가 노드에 적재된 상태
+- `helm` (v4.2 사용). `brew install helm`
+- 같은 이름의 Deployment 가 plain manifest 로 떠 있으면 먼저 지웁니다 (`kubectl delete -f site.yaml`). Helm 은 자기가 만들지 않은 리소스를 덮어쓰지 않습니다
+
+## 단계별 사용법
+
+
+### helm create 로 뼈대를 만들고 안 쓰는 것을 뺀다
+
+[프롬프트]
+helm 차트 배포 테스트 유스케이스도 작성
+
+
+```bash
+helm create aiusecases
+rm aiusecases/templates/{hpa,serviceaccount,httproute}.yaml   # 이번엔 안 씀
+sed -i '' '/serviceAccountName:/d' aiusecases/templates/deployment.yaml
+```
+
+[values.yaml](values.yaml) 에서 바꾼 것은 다섯 줄입니다.
+
+```yaml
+image:
+  repository: localhost/aiusecases
+  tag: "dev"
+  pullPolicy: Never              # kind load 로 넣은 로컬 이미지
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts: [{ host: aiusecases.localtest.me, … }]
+```
+
+배포 전 두 가지 검사:
+
+```bash
+helm lint aiusecases                                   # 1 chart(s) linted, 0 chart(s) failed
+helm template aiusecases ./aiusecases -n demo | grep -E '^kind:|image:|host:|imagePullPolicy'
+```
+
+`template` 출력을 grep 으로 훑는 습관이 중요합니다. `install` 전에 이미지 이름·호스트·pullPolicy 가 의도대로 렌더됐는지 10초에 확인됩니다.
+
+
+
+### install → helm test → upgrade
+
+```bash
+helm install aiusecases ./aiusecases -n demo --wait --timeout 120s
+helm test aiusecases -n demo
+helm upgrade aiusecases ./aiusecases -n demo --set replicaCount=2 --wait
+```
+
+`--wait` 는 파드가 Ready 될 때까지 기다렸다가 성공/실패를 돌려줍니다. 없으면 "deployed" 라고 해 놓고 파드는 CrashLoop 인 상황이 생깁니다.
+
+`helm test` 는 차트에 들어 있는 `tests/test-connection.yaml` — busybox 파드가 서비스에 `wget` 하는 것 — 을 실행합니다. 기본 테스트는 "서비스가 응답하나" 수준이지만, 여기에 헬스체크 URL 이나 응답 본문 검사를 넣으면 배포 후 스모크 테스트가 됩니다.
+
+
+
+### 일부러 깨뜨리고 롤백한다
+
+```bash
+helm upgrade aiusecases ./aiusecases -n demo --set image.tag=v2-typo --wait --timeout 45s
+# Error: UPGRADE FAILED: resource Deployment/demo/aiusecases not ready … Updated: 1/2
+```
+
+여기서 볼 것 세 가지:
+
+1. **서비스는 살아 있다.** 롤링 업데이트는 새 파드가 Ready 되기 전엔 기존 파드를 안 지웁니다. 실패 중에 `curl` 해도 200. 이게 "배포 실패 = 장애" 가 아닌 이유입니다
+2. **실패한 리비전은 `failed` 로 기록**된다. `helm history` 에 3번이 남아 있어서, 나중에 "언제 누가 뭘 하다 실패했나" 를 추적할 수 있습니다
+3. **롤백은 새 리비전**이다. `helm rollback aiusecases 2` 는 2번으로 "되돌리는" 게 아니라 2번과 같은 내용의 **4번**을 만듭니다. `helm get values` 를 보면 `replicaCount: 2` 만 남고 `image.tag` 오버라이드는 사라졌습니다
+
+```bash
+helm rollback aiusecases 2 -n demo --wait      # Rollback was a success!
+helm history aiusecases -n demo                 # 1 superseded / 2 superseded / 3 failed / 4 deployed
+```
+
+
+## 결과
+
+| 단계 | 시각 |
+| --- | --- |
+| 차트 생성·values·lint·template | 17:03:54 → 17:04:18 |
+| install + test | → 17:04:31 |
+| upgrade (rev 2) | → 17:04:39 |
+| 깨진 upgrade 실패 확인 (rev 3) | → 17:05:26 |
+| rollback (rev 4) + 검증 | → 17:05:36 |
+| **합계** | **1분 42초** |
+
+차트 하나의 생애주기 — install, test, upgrade, failed upgrade, rollback — 를 실제 클러스터에서 겪었고, 각 단계의 리비전·파드 상태·서비스 응답이 기록으로 남았습니다. 이걸 프로덕션에서 처음 겪으면 각 단계가 30분짜리 사건입니다.
+
+차트 파일: [aiusecases-0.1.0.tgz](aiusecases-0.1.0.tgz)
+
+## 주의사항
+
+- **`--wait` 없는 install/upgrade 는 성공을 보장하지 않습니다.** Helm 은 manifest 를 제출한 시점에 "deployed" 를 찍습니다. `--wait --timeout` 을 항상 붙이고, 타임아웃은 파드 기동 시간의 2~3배로.
+- **롤백은 values 오버라이드도 되돌립니다.** `--set` 으로 얹은 값은 그 리비전에만 있습니다. 롤백 후 `helm get values` 로 현재 값을 확인하세요. 이 사례에서 `image.tag=v2-typo` 는 사라지고 `replicaCount=2` 만 남았습니다.
+- **`helm test` 기본 테스트는 얕습니다.** "서비스에 연결된다" 만 봅니다. `tests/` 에 `/healthz` 호출, 기대 응답 문자열 검사, DB 연결 확인 파드를 추가해야 배포 게이트로 쓸 수 있습니다.
+- **`helm create` 뼈대의 serviceAccount·hpa·httproute 는 안 쓰면 지우세요.** 남겨 두면 values 의 `enabled: false` 로 꺼지긴 하지만, 6개월 뒤 누군가 "이거 왜 있지" 하며 30분을 씁니다.
+- **plain manifest 와 Helm 을 섞지 마세요.** 같은 이름의 Deployment 가 `kubectl apply` 로 떠 있으면 `helm install` 이 "already exists" 로 실패합니다. 한쪽으로 통일.
+- 로컬 이미지(`pullPolicy: Never`)라서 태그 오류가 `ErrImageNeverPull` 로 즉시 드러났습니다. 레지스트리를 쓰면 `ImagePullBackOff` 로 같은 시나리오가 됩니다.
+
+## 응용
+
+- 사내 차트에 `tests/` 를 채우고 CI 에서 `kind create → helm install --wait → helm test` 를 PR 게이트로
+- `helm upgrade --dry-run --debug` 와 `helm diff` 플러그인으로 업그레이드 전 변경 리소스만 보기
+- `values-dev.yaml` / `values-prod.yaml` 을 나누고 로컬 kind 에서는 dev 값으로 같은 차트 검증
+- 실패 리비전이 쌓이는 걸 막으려면 `helm upgrade --atomic` — 실패 시 자동 롤백
+
+
+# Argo CD GitOps 배포 — Git 커밋이 곧 배포, 손으로 바꾸면 되돌아온다
+
+
+## 어떤 문제를 해결하나
+
+`helm upgrade` 를 누가 언제 어떤 값으로 쳤는지는 셸 히스토리에만 남습니다. 누군가 `kubectl scale` 로 손을 대면 그 사실은 아무 데도 안 남습니다.
+GitOps 는 이걸 뒤집습니다 — **Git 이 원본, 클러스터는 그 사본.** Argo CD 가 저장소를 보고 있다가 커밋이 들어오면 배포하고, 클러스터가 Git 과 달라지면 되돌립니다.
+
+[로컬 kind](/docs/usecases/coding/local-k8s-dev-env-kind-podman) + [Helm 차트](/docs/usecases/coding/helm-chart-deploy-test-on-kind) 위에 Argo CD 를 얹어, 이 사이트 저장소의 `deploy/` 폴더를 Application 으로 등록하고 두 가지를 실험했습니다: **Git 을 바꾸면 클러스터가 따라오는가**, **클러스터를 손으로 바꾸면 Git 으로 돌아오는가.**
+
+## 사전 준비
+
+- kind 클러스터 + ingress-nginx + `localhost/aiusecases:dev` 이미지 적재 (앞 사례)
+- Argo CD 가 읽을 수 있는 Git 저장소. 여기서는 이 사이트 저장소([jeonck/aiusecase](https://github.com/jeonck/aiusecase))에 `deploy/aiusecases` 차트를 넣었습니다 — 공개 저장소라 인증 불필요
+- Helm 으로 설치해 둔 같은 이름의 릴리스가 있으면 **먼저 `helm uninstall`**. 두 주인이 한 Deployment 를 다투게 하면 안 됩니다
+
+## 단계별 사용법
+
+
+### Argo CD 를 올리고 (CRD 오류 하나) Application 을 등록한다
+
+[프롬프트]
+ArgoCD로 GitOps 배포 유스케이스도 작성
+
+
+```bash
+helm uninstall aiusecases -n demo
+kubectl create namespace argocd
+kubectl apply -n argocd --server-side -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+`--server-side` 가 없으면 `applicationsets.argoproj.io` CRD 가 `metadata.annotations: Too long` 으로 거부됩니다. client-side apply 는 전체 manifest 를 `last-applied` 주석에 넣는데 이 CRD 가 256KB 를 넘기 때문입니다. Claude 가 오류 메시지를 보고 바로 바꿔 적용했습니다.
+
+차트를 저장소에 넣고 Application 을 만듭니다 — [argocd-app.yaml](argocd-app.yaml):
+
+```yaml
+spec:
+  source:
+    repoURL: https://github.com/jeonck/aiusecase.git
+    targetRevision: main
+    path: deploy/aiusecases          # Helm 차트 디렉터리 → Argo CD 가 helm template 으로 렌더
+  destination: { server: https://kubernetes.default.svc, namespace: demo }
+  syncPolicy:
+    automated:
+      prune: true                    # Git 에서 지운 리소스는 클러스터에서도 지운다
+      selfHeal: true                 # 클러스터를 손으로 바꾸면 Git 상태로 되돌린다
+```
+
+`kubectl apply -f deploy/argocd-app.yaml` → 40초 뒤 `Synced Healthy`, 사이트 200.
+
+
+
+### UI 에서 Application 을 본다
+
+```bash
+kubectl -n argocd patch cm argocd-cmd-params-cm --type merge -p '{"data":{"server.insecure":"true"}}'
+kubectl -n argocd rollout restart deploy/argocd-server
+kubectl -n argocd port-forward svc/argocd-server 8081:80
+```
+
+로컬에서는 TLS 를 끄고(`server.insecure`) HTTP 로 port-forward 하는 게 편합니다. 초기 비밀번호는 `argocd-initial-admin-secret` 에 있습니다. 브라우저 조작(로그인·화면 이동·캡처)은 Claude 가 ego lite 로 했습니다.
+
+
+
+### 리소스 트리 — 차트가 무엇을 만들었는지 한눈에
+
+Helm 차트의 리소스 4개가 트리로 보이고, 각 노드에 Health(하트)와 Sync(체크) 아이콘이 붙습니다. `helm test` 훅으로 들어간 `test-connection` 파드도 Argo CD 가 실행해 `completed 0/1` 로 표시합니다.
+
+상단 `LAST SYNC` 에 **커밋 해시·작성자·커밋 메시지**가 뜹니다. "이 배포가 어느 커밋인가" 를 셸 히스토리가 아니라 UI 에서 봅니다.
+
+
+
+### Git 을 바꾸면 클러스터가 따라오고, 손으로 바꾸면 되돌아온다
+
+**실험 1 — Git → 클러스터.** `deploy/aiusecases/values.yaml` 의 `replicaCount: 2` 로 바꿔 커밋·푸시. 17:17:40 에 푸시했고 17:20:28 에 파드 2개가 Ready 됐습니다. **2분 48초** — Argo CD 기본 폴링 주기가 3분이기 때문입니다. GitHub 웹훅을 걸면 수 초로 줄어듭니다.
+
+**실험 2 — 클러스터 → Git (selfHeal).**
+
+```bash
+kubectl -n demo scale deploy/aiusecases --replicas=1
+kubectl -n demo get deploy aiusecases -o jsonpath='{.spec.replicas}'   # 1초 뒤: 2
+```
+
+Argo CD 가 Deployment 변경 이벤트를 받자마자 Git 의 값(2)으로 되돌렸습니다. `kubectl` 로 낸 변경은 **그냥 사라집니다** — 이게 GitOps 의 규칙이고, 운영 중 "누가 손댔지" 가 없어지는 이유입니다.
+
+
+
+### History — 어느 커밋이 언제 배포됐나
+
+`helm history` 가 리비전 번호만 보여 주던 것과 달리, Argo CD 히스토리는 **Git 커밋**과 1:1 입니다. 롤백도 여기서 커밋 단위로 합니다 — 단, 자동 동기화가 켜져 있으면 롤백 직후 다시 최신 커밋으로 돌아가므로, 진짜 롤백은 **Git 에서 revert 커밋**을 만드는 것입니다.
+
+
+## 결과
+
+| 단계 | 시각 |
+| --- | --- |
+| Argo CD 설치 (CRD 오류 수정 포함) | 17:15:36 → 17:16:21 |
+| 차트 커밋·푸시, Application 등록, 첫 Sync | → 17:17:26 |
+| Git 변경 → 자동 반영 | 17:17:40 → 17:20:28 (폴링 3분) |
+| selfHeal (kubectl scale 되돌림) | 1초 |
+| UI 확인·캡처 | → 17:22 |
+
+이제 이 클러스터의 `demo` 네임스페이스는 **`deploy/aiusecases` 폴더의 커밋 히스토리 그 자체**입니다. `kubectl apply` 도 `helm upgrade` 도 더 이상 쓰지 않습니다 — 써도 되돌아옵니다.
+
+## 주의사항
+
+- **`--server-side` 로 설치하세요.** Argo CD 의 CRD 는 client-side apply 의 주석 한도(256KB)를 넘습니다. 오류 메시지가 "invalid… Too long" 이면 이겁니다.
+- **Helm 릴리스와 Argo CD Application 이 같은 리소스를 관리하게 두지 마세요.** 이 사례에서 `helm uninstall` 을 먼저 했습니다. Argo CD 가 Helm 차트를 배포할 때는 `helm template` 으로 렌더만 하고 `helm install` 을 하지 않습니다 — `helm list` 에 안 나오는 게 정상입니다.
+- **폴링 3분은 로컬에서 답답합니다.** `argocd-cm` 의 `timeout.reconciliation` 을 줄이거나 GitHub 웹훅(`/api/webhook`)을 걸면 즉시 반영됩니다. 프로덕션에서는 웹훅이 표준입니다.
+- **`selfHeal: true` 는 디버깅을 방해합니다.** 문제 파드를 `kubectl edit` 로 잠깐 고쳐 보려 해도 되돌아갑니다. 디버깅 중엔 `argocd app set --sync-policy none` 으로 잠시 끄고, 끝나면 다시 켜세요.
+- **`prune: true` 는 Git 에서 지운 것을 실제로 지웁니다.** 차트에서 리소스를 제거하고 커밋하는 순간 클러스터에서도 사라집니다. 의도한 동작이지만 처음엔 놀랍니다.
+- 초기 admin 비밀번호는 로그인 후 바꾸고 `argocd-initial-admin-secret` 을 지우는 게 공식 권장입니다. 로컬 kind 라 그대로 뒀습니다.
+- 캡처의 커밋 작성자 이메일은 가렸습니다. Argo CD UI 는 Git 작성자를 그대로 노출하니 공유 시 주의.
+
+## 응용
+
+- `deploy/values-dev.yaml` / `values-prod.yaml` 을 두고 Application 두 개로 환경 분리 — 같은 차트, 다른 값, 다른 네임스페이스
+- ApplicationSet 으로 저장소의 `apps/*/` 폴더마다 Application 자동 생성
+- PR 이 머지되면 배포되는 흐름: 브랜치 보호 + `main` 만 `targetRevision` 으로 → 코드 리뷰가 곧 배포 승인
+- 롤백을 Git revert 로 통일 — `helm rollback` 대신 `git revert <sha> && git push`, Argo CD 가 나머지를 함
+
+
+# CKA 연습용 클러스터 — worker 2 + Calico + metrics-server, 시험 범위 4가지 검증까지
+
+
+## 어떤 문제를 해결하나
+
+CKA 는 손으로 푸는 시험입니다. 연습 환경이 있어야 하는데, `kind create cluster` 기본값으로 만든 클러스터는 두 가지가 빠져 있습니다.
+
+- **NetworkPolicy 가 안 먹습니다.** 기본 CNI(kindnet)가 정책을 구현하지 않아, 정책을 만들어도 트래픽이 그냥 통합니다. 시험에서 가장 자주 틀리는 영역인데 연습이 안 되는 셈
+- **`kubectl top` 이 안 됩니다.** metrics-server 가 없고, 넣어도 kind 의 자체 서명 인증서 때문에 옵션을 하나 더 줘야 합니다
+
+[앞 사례](/docs/usecases/coding/local-k8s-dev-env-kind-podman)의 개발용 클러스터를 지우고, 시험 범위에 맞춘 클러스터를 새로 만들었습니다. 만들고 끝이 아니라 **시험 문제 유형 네 가지를 실제로 돌려** 환경이 맞는지 확인했습니다.
+
+## 사전 준비
+
+- kind, kubectl, Podman machine (앞 사례와 동일). `export KIND_EXPERIMENTAL_PROVIDER=podman`
+- 메모리: 3노드 + Calico 가 약 2.5GB. Podman machine 6GiB 에서 다른 클러스터와 동시에 띄우기는 빠듯해 기존 `dev` 는 지웠습니다
+- 재현은 [cka-setup.sh](cka-setup.sh) 한 번 — 아래 단계를 순서·대기 포함해 그대로 담았습니다
+
+## 단계별 사용법
+
+
+### 기본 CNI 를 끄고 만든다 → Calico → metrics-server
+
+[프롬프트]
+cka 연습용 클러스터 하나 더 만들어줘. 만들면서 유스케이스로도 작성하면 일석이조.
+만든이후에는 기존에 argocd 유스케이스까지 했던 클러스터는 삭제해도 될 것 같은데.
+
+
+[kind-cka.yaml](kind-cka.yaml) 의 핵심은 두 줄입니다.
+
+```yaml
+networking:
+  disableDefaultCNI: true        # kindnet 대신 Calico 를 쓰기 위해
+  podSubnet: 192.168.0.0/16      # Calico 기본 IPPool 과 맞춘다
+nodes: [control-plane, worker, worker]
+```
+
+```bash
+kind create cluster --config kind-cka.yaml                                  # 29초, 노드는 NotReady
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.2/manifests/tigera-operator.yaml
+kubectl -n tigera-operator rollout status deploy/tigera-operator             # ← 이걸 기다리고
+kubectl apply  -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.2/manifests/custom-resources.yaml
+```
+
+operator 직후 custom-resources 를 넣으면 `no matches for kind "Whisker"` — CRD 가 아직 없어서입니다. operator 가 뜬 뒤 다시 넣으면 됩니다. 2분쯤 지나면 `kubectl get tigerastatus` 가 전부 `AVAILABLE True`, 노드 3개 Ready.
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl -n kube-system patch deploy metrics-server --type=json \
+  -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+kubectl top nodes
+```
+
+
+
+### 시험 범위 4가지를 문제처럼 돌려 본다
+
+환경이 시험과 같은지는 문제를 풀어 봐야 압니다. 네 가지를 골랐습니다.
+
+**① NetworkPolicy** — [deny-all.yaml](deny-all.yaml), [allow-probe.yaml](allow-probe.yaml)
+
+| 상태 | `wget http://web` 결과 |
+| --- | --- |
+| 정책 없음 | `Welcome to nginx!` |
+| default-deny-ingress 적용 | `download timed out` ← **Calico 라서 막힘** |
+| `role=probe` 파드만 허용 | `Welcome to nginx!` |
+
+기본 kindnet 이었으면 두 번째 줄도 통과해서, 정책을 잘못 써도 모릅니다.
+
+**② drain / cordon** — worker 두 개라 가능합니다. `web` 4 replicas 를 2/2 로 올린 뒤 `kubectl drain cka-worker --ignore-daemonsets --delete-emptydir-data` → 4개가 전부 `cka-worker2` 로. `Ready,SchedulingDisabled` 확인 후 `uncordon`.
+
+**③ etcd 스냅샷** — 시험 단골. kind 의 etcd 컨테이너는 **distroless 라 `sh` 가 없습니다.** `exec -- sh -c` 는 실패하고 `etcdctl` 을 바로 실행해야 합니다.
+
+```bash
+kubectl -n kube-system exec etcd-cka-control-plane -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt --cert=/etc/kubernetes/pki/etcd/server.crt --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /var/lib/etcd/snap.db
+kubectl -n kube-system exec etcd-cka-control-plane -- etcdutl snapshot status /var/lib/etcd/snap.db -w table
+# | 5c90bd24 | 3484 | 927 | 11 MB | 3.6.0 |
+```
+
+시험 환경은 노드에 `etcdctl` 이 깔려 있어 `ssh node` 뒤에 바로 칩니다. 여기서는 `podman exec cka-control-plane` 이 그 `ssh` 에 해당합니다.
+
+**④ RBAC** — `sa` + `role(get,list pods)` + `rolebinding` 만들고 `kubectl auth can-i … --as=system:serviceaccount:default:deploy-viewer` 로 yes/no/no 확인.
+
+
+## 결과
+
+| 단계 | 소요 |
+| --- | --- |
+| dev 클러스터 삭제 + cka 생성 | 29초 |
+| Calico (CRD 대기 포함) | 약 2분 |
+| metrics-server | 약 1분 |
+| 시험 유형 4가지 검증 | 1분 30초 |
+
+NetworkPolicy 가 진짜로 막히고, 노드 3개라 drain 이 되고, `kubectl top` 이 나오고, etcd 스냅샷이 떠지는 클러스터. 연습 후 지저분해지면 `kind delete cluster --name cka && ./cka-setup.sh` 로 5분 안에 새 것.
+
+## 주의사항
+
+- **Calico custom-resources 는 operator 가 뜬 뒤에.** 바로 넣으면 `no matches for kind` 로 실패합니다. 스크립트에는 `until kubectl get crd installations.operator.tigera.io` 대기를 넣었습니다.
+- **`podSubnet` 을 Calico 기본값(192.168.0.0/16)에 맞추세요.** 안 맞으면 custom-resources 의 `cidr` 도 같이 고쳐야 합니다.
+- **etcd 파드에 `sh` 가 없습니다.** `exec -- etcdctl …` 처럼 바이너리를 직접. 시험에서는 노드에 SSH 해서 치므로 이 차이만 알아 두면 됩니다.
+- **drain 은 시스템 파드도 쫓아냅니다.** `--ignore-daemonsets` 를 빼면 DaemonSet 때문에 실패하고, `--delete-emptydir-data` 를 빼면 emptyDir 파드에서 멈춥니다. 시험에서 나오는 오류 메시지 그대로 연습됩니다.
+- **kind 는 노드를 나중에 추가하지 못합니다.** worker 를 더 원하면 yaml 고치고 재생성.
+- Mac 재부팅 후에는 `podman start cka-control-plane cka-worker cka-worker2` 로 노드 컨테이너를 다시 올려야 합니다. etcd 데이터는 컨테이너 안에 있어 유지됩니다.
+- `~/.zshrc` 에 `export KIND_EXPERIMENTAL_PROVIDER=podman` 을 넣어 두면 매번 안 잊습니다.
+
+## 응용
+
+- 시험 유형별 연습 세트: `kubectl create deploy … --dry-run=client -o yaml` 로 YAML 뼈대 뽑기, `kubectl explain`, 노드 장애 시뮬레이션(`podman stop cka-worker2`), 인증서 갱신(`kubeadm certs check-expiration` 은 control-plane 컨테이너 안에서)
+- 업그레이드 연습은 kind 로는 제한적(노드 이미지 교체 방식). 필요하면 kubeadm 기반 VM 으로
+- Ingress 문제 유형이 필요하면 앞 사례의 ingress-nginx 설치를 그대로 추가 (포트 매핑은 이 yaml 에 없으니 `extraPortMappings` 추가)
+- 같은 스크립트로 팀 스터디원 전원이 동일 환경 — `cka-setup.sh` 하나 공유
+
+
+# CKA 유형별 연습 문제 12제 — setup·check 스크립트로 채점까지 자동
+
+
+## 어떤 문제를 해결하나
+
+CKA 연습의 어려움은 문제가 아니라 **채점**입니다. 풀고 나서 맞았는지 스스로 확인해야 하고, 고장 시나리오는 누군가 미리 망가뜨려 놔야 합니다. 혼자 하면 둘 다 안 됩니다.
+
+[앞 사례의 cka 클러스터](/docs/usecases/coding/cka-practice-cluster-kind-calico) 위에서 Claude Code 가 세 가지를 만들었습니다.
+
+- `setup.sh` — 네임스페이스를 초기화하고 고장 시나리오 3개를 심는다 (이미지 태그 오타, Service selector 불일치, worker2 kubelet 중지)
+- `problems.txt` — 12문제. 시험 커리큘럼 5영역(아키텍처·워크로드·네트워킹·스토리지·트러블슈팅)
+- `check.sh` — 문제마다 **결과**를 검사해 PASS/FAIL. readyReplicas, endpoint 수, wget 성공/타임아웃, `can-i`, 파일 내용
+
+그리고 모범 답안을 직접 풀어 12/12 를 확인했습니다 — 첫 시도는 8/12 였고, 그 실패가 이 세트의 가장 중요한 교훈이 됐습니다.
+
+## 사전 준비
+
+- [cka 클러스터](/docs/usecases/coding/cka-practice-cluster-kind-calico) (worker 2 + Calico). NetworkPolicy 문제(Q6)는 Calico 없이는 채점이 안 됩니다
+- `export KIND_EXPERIMENTAL_PROVIDER=podman`
+- 파일 5개를 한 폴더에: [setup.sh](setup.sh) · [problems.txt](problems.txt) · [check.sh](check.sh) · [solutions.sh](solutions.sh) · [solutions.txt](solutions.txt)
+
+## 단계별 사용법
+
+
+### setup.sh 로 시나리오를 심고, 풀기 전 check.sh 를 본다
+
+[프롬프트]
+cka 시험 유형별 연습 문제 세트도 유스케이스로 작성
+
+
+```bash
+./setup.sh      # ns apps/secure/storage/trouble 초기화, taint·PV·백업 제거, 고장 3개 심기
+./check.sh      # 11 FAIL — 이 상태에서 시작
+```
+
+12문제 요약 ([problems.txt](problems.txt) 전문):
+
+| # | 영역 | 문제 |
+| --- | --- | --- |
+| 1 | Workloads | Deployment `api` 3 replicas, requests 100m/64Mi |
+| 2 | Workloads | 1.28 로 롤링 업데이트 후 롤백 |
+| 3 | Scheduling | 파드를 `cka-worker2` 에 고정 |
+| 4 | Scheduling | taint `dedicated=db:NoSchedule` + toleration 파드를 그 노드에 |
+| 5 | Services | ClusterIP 8080→80 |
+| 6 | Networking | `access=granted` 만 접근 허용하는 NetworkPolicy |
+| 7 | Storage | hostPath PV + PVC + 마운트 후 파일 쓰기 |
+| 8 | Config | ConfigMap·Secret 을 env 로 |
+| 9 | RBAC | deployments create/list 만 되는 SA |
+| 10 | Troubleshooting | 안 뜨는 Deployment + 안 가는 Service 고치기 |
+| 11 | Troubleshooting | NotReady 노드 복구 |
+| 12 | Cluster | etcd 스냅샷 |
+
+
+
+### 첫 시도 — 순서대로 풀다 두 문제가 Pending 이 된다
+
+모범 답안을 1번부터 순서대로 실행했습니다. Q7 에서 `data-pod` 가 뜨지 않아 멈췄고, 체커는 8/12.
+
+- Q3 `pinned` — `nodeName: cka-worker2` 로 박았는데 그 노드가 NotReady → Pending
+- Q7 `data-pod` — 스케줄러가 worker2 에 올렸는데 kubelet 이 죽어 있음 → Pending
+- Q11 — 아직 안 풀었음. `kubectl describe node cka-worker2` → `Kubelet stopped posting node status`
+
+시험에서도 똑같이 일어납니다. 트러블슈팅 문제(30%)는 뒤쪽에 있지만, **클러스터 상태에 관한 것은 먼저 풀어야** 앞 문제들이 정상 동작합니다. `solutions.sh` 는 이 교훈을 반영해 Q11 을 맨 앞으로 옮겼습니다.
+
+```bash
+podman exec cka-worker2 systemctl start kubelet      # 시험: ssh cka-worker2 → sudo systemctl start kubelet
+```
+
+
+
+### 노드부터 살리고 다시 — 12/12
+
+```bash
+./setup.sh && ./solutions.sh && ./check.sh
+# ----- 12 PASS / 0 FAIL
+```
+
+check.sh 가 보는 것은 정답 YAML 이 아니라 결과입니다. 예를 들어 Q6 은 라벨 있는 busybox 와 없는 busybox 로 실제 `wget` 을 쏴서 하나는 응답, 하나는 `timed out` 이어야 PASS. Q9 는 `kubectl auth can-i` 네 번. Q7 은 파드 안의 파일 내용. 어떤 방법으로 풀든(명령형·YAML·nodeName·nodeSelector) 결과가 맞으면 통과합니다.
+
+풀이 노트는 [solutions.txt](solutions.txt) — 문제마다 시험장에서 떠올릴 명령 한 줄과 함정.
+
+
+## 결과
+
+| | |
+| --- | --- |
+| 문제 수 | 12 (5영역) |
+| 자동 채점 | check.sh, 문제당 결과 기준 |
+| 고장 시나리오 | 3 (이미지 오타 · selector 불일치 · kubelet 중지) |
+| 모범 답안 실행 | 15초, 12/12 |
+| 첫 시도 | 8/12 — 순서 교훈 |
+| 초기화 | `./setup.sh` 로 몇 번이고 |
+
+40분 목표로 풀고 `./check.sh`, 틀린 것만 `solutions.txt` 보고 다시. 세트를 다 맞히면 `setup.sh` 의 고장 시나리오를 바꿔서(다른 오타, 다른 네임스페이스, PVC accessMode 불일치) 새 세트를 만들면 됩니다 — Claude 에게 "고장 시나리오 3개 더" 라고 하면 됩니다.
+
+## 주의사항
+
+- **클러스터 상태 문제를 먼저.** 이 세트가 실제로 증명한 것. NotReady 노드를 두고 파드 문제를 풀면 파드가 그 노드로 가서 Pending 이 됩니다.
+- **check.sh 는 시험에 없습니다.** 연습 때는 문제를 푼 뒤 체커 대신 `kubectl get/describe` 로 직접 확인하는 습관을 들이세요. 체커는 마지막에 한 번.
+- **setup.sh 는 kubelet 을 멈춥니다.** Q11 시나리오 때문입니다. 연습을 안 할 때도 `cka-worker2` 가 NotReady 로 남으니, 끝나면 `podman exec cka-worker2 systemctl start kubelet`.
+- **PV 는 cluster-scoped.** 네임스페이스를 지워도 `pv-data` 는 남습니다. setup.sh 가 지우지만 직접 만든 PV 는 직접 정리.
+- Q3 을 `nodeName` 으로 풀면 스케줄러를 건너뛰어 노드가 죽어 있어도 배정됩니다. 시험에선 빠르지만, 실무에선 nodeSelector/affinity.
+- 시간 제한 없이 풀면 의미가 없습니다. 타이머 40분.
+
+## 응용
+
+- 같은 구조로 **CKAD 세트**(Probe, Job/CronJob, multi-container, SecurityContext) — setup/check 패턴 그대로
+- 팀 스터디: 한 사람이 setup.sh 에 고장 시나리오를 추가하고, 나머지가 푼다
+- 기출 유형 추가: 인증서 만료 확인(`kubeadm certs check-expiration`), 정적 파드, Ingress 규칙, HPA
+- check.sh 결과를 매일 기록해 영역별 약점 추적
+
+
+# CKAD 연습 문제 12제 — 사이드카·Job·Blue/Green·Probe·SecurityContext까지 자동 채점
+
+
+## 어떤 문제를 해결하나
+
+CKAD 는 CKA 보다 **파드 안쪽**을 봅니다 — 사이드카, Job/CronJob, probe, securityContext, ConfigMap/Secret, ServiceAccount, 배포 전략. 클러스터 운영보다 YAML 을 정확히 빨리 쓰는 시험입니다.
+
+[CKA 세트](/docs/usecases/coding/cka-practice-problem-set)와 같은 구조로 만들었습니다: `setup.sh` 가 시나리오를 심고, `check.sh` 가 결과를 채점하고, `solutions.sh` 로 12/12 를 검증했습니다. 이번엔 만드는 과정에서 **두 세트가 서로 간섭하는 사고**를 겪었고, 그게 setup.sh 의 첫 줄이 됐습니다.
+
+## 사전 준비
+
+- [cka 클러스터](/docs/usecases/coding/cka-practice-cluster-kind-calico) + `helm`
+- 파일 5개: [setup.sh](setup.sh) · [problems.txt](problems.txt) · [check.sh](check.sh) · [solutions.sh](solutions.sh) · [solutions.txt](solutions.txt)
+- CKA 세트를 돌린 뒤라면 `cka-worker2` 의 kubelet 이 꺼져 있을 수 있습니다. setup.sh 가 먼저 켭니다 (아래 사고 참조)
+
+## 단계별 사용법
+
+
+### setup.sh — 시나리오 2개를 심는다, 그리고 사고
+
+[프롬프트]
+CKAD 연습 문제 세트도 유스케이스로 작성
+
+
+setup.sh 는 네임스페이스 `ckad`, `ckad-helm`, `quota-ns` 를 초기화하고 두 가지를 심습니다.
+
+- Q8 용 `crasher` 파드 — 시작하자마자 `config file … not found` 를 찍고 exit 1 → CrashLoopBackOff
+- Q6 용 로컬 Helm 차트 `./mychart` (helm create 뼈대)
+
+12문제 ([problems.txt](problems.txt) 전문):
+
+| # | 영역 | 문제 |
+| --- | --- | --- |
+| 1 | Design | nginx + busybox 사이드카, emptyDir 로 access.log 공유·tail |
+| 2 | Design | Job completions 3 / parallelism 2 / backoffLimit 2 |
+| 3 | Design | CronJob 5분, Forbid, history 2 |
+| 4 | Deployment | maxSurge 1 / maxUnavailable 0 |
+| 5 | Deployment | Blue/Green — Service 가 green 만 |
+| 6 | Deployment | 로컬 차트를 `--set replicaCount=2` 로 설치 |
+| 7 | Observability | readiness + liveness httpGet, initialDelay 5 |
+| 8 | Observability | CrashLoopBackOff 원인 찾고 고치기 |
+| 9 | Security | runAsUser 1000 / nonRoot / no privesc / drop ALL |
+| 10 | Security | ResourceQuota 아래서 requests 있는 파드 |
+| 11 | Security | automount 끈 SA, 토큰 미마운트 확인 |
+| 12 | Networking | Service + Ingress(host, class) |
+
+**사고 1 — 모범 답안의 YAML 오류.** Q5 에서 `create deploy --dry-run` 출력에 `sed` 로 라벨 한 줄을 끼워 넣다 들여쓰기가 깨졌습니다. 라벨이 둘(app, version)인 Deployment 는 처음부터 YAML 로 쓰는 게 빠릅니다. 5/12.
+
+**사고 2 — setup.sh 가 11분 멈춤.** 재실행하려는데 네임스페이스가 `Terminating` 에서 안 끝났습니다.
+
+```
+Failed to delete all resource types, 4 remaining: …/apis/projectcalico.org/v3/…/networkpolicies: Unauthorized
+```
+
+Calico 의 aggregated API 가 죽어 있었습니다. 왜? **CKA 세트의 Q11 시나리오가 `cka-worker2` 의 kubelet 을 멈춰 뒀고**, 그 노드에 있던 `calico-apiserver` 파드 2개가 `Terminating` 인 채 못 죽고 있었습니다. 네임스페이스 삭제는 모든 API 그룹의 리소스를 지워야 끝나는데 그 API 가 500 을 냅니다.
+
+```bash
+podman exec cka-worker2 systemctl start kubelet     # 30초 뒤 Terminating 정리 → 삭제 진행
+```
+
+그래서 setup.sh 첫 줄에 "모든 노드 kubelet 시작" 을 넣었습니다. 두 세트를 한 클러스터에서 번갈아 쓸 때 필요한 안전장치입니다.
+
+
+
+### 12/12 — check.sh 가 보는 것
+
+```bash
+./setup.sh && ./solutions.sh && ./check.sh
+# ----- 12 PASS / 0 FAIL
+```
+
+결과 기준 채점의 예:
+
+- Q1 — 사이드카 컨테이너의 **로그에 `GET /` 줄**이 있어야 PASS. emptyDir 을 붙였는지가 아니라 실제로 공유되는지
+- Q5 — Service 의 EndpointSlice 주소 목록이 **green 파드 IP 목록과 정확히 일치**해야 PASS
+- Q8 — `crasher` 가 `Running` 이고 컨테이너 ready
+- Q11 — 파드 안에서 `ls /var/run/secrets/kubernetes.io/serviceaccount` 가 **비어 있어야** PASS. `automountServiceAccountToken: false` 를 SA 에 걸었는지 파드에 걸었는지는 안 봅니다
+
+풀이 노트는 [solutions.txt](solutions.txt). 각 문제의 함정 한 줄: Job 은 `create job` 으로 completions 를 못 준다, securityContext 는 파드 레벨과 컨테이너 레벨 위치가 다르다, 쿼터가 requests.cpu 를 걸면 requests 없는 파드는 거부된다 …
+
+
+## 결과
+
+| | |
+| --- | --- |
+| 문제 수 | 12 (5영역) |
+| 시나리오 | CrashLoopBackOff 파드, 로컬 Helm 차트 |
+| 모범 답안 | 11초, 12/12 |
+| 첫 시도 | 5/12 (YAML 들여쓰기) + 세트 간섭 사고 |
+| 위치 | `~/ckad-practice/` (CKA 세트는 `~/cka-practice/`) |
+
+CKA·CKAD 두 세트, 24문제, 같은 클러스터. 번갈아 풀 때는 각 setup.sh 가 상대 세트의 흔적(kubelet 정지, taint)을 정리합니다.
+
+## 주의사항
+
+- **두 세트를 한 클러스터에서 쓰면 setup.sh 를 꼭 거치세요.** CKA 의 kubelet 정지·taint 가 CKAD 문제를 이상하게 만들고, 반대로 CKAD 의 ResourceQuota 는 CKA 와 무관하지만 네임스페이스가 겹치지 않게 했습니다.
+- **네임스페이스가 Terminating 에서 멈추면 aggregated API 를 의심하세요.** `kubectl get ns X -o jsonpath='{.status.conditions}'` 에 원인이 적혀 있습니다. Calico·metrics-server 같은 aggregated API 의 파드가 죽은 노드에 있으면 이렇게 됩니다. 시험에서도 나올 수 있는 진단입니다.
+- **파드의 command 는 못 고칩니다.** Q8 은 지우고 다시 만드는 게 정답. `kubectl edit` 로 command 를 바꾸려 하면 거부됩니다.
+- **라벨이 둘 이상인 Deployment 는 YAML 로.** `create deploy` 는 `app=<이름>` 하나만 붙입니다.
+- check.sh 의 Q1 은 사이드카가 `access.log` 를 tail 하는 시점에 파일이 있어야 합니다. 모범 답안처럼 `touch` 를 먼저 하거나, nginx 가 파일을 만든 뒤 사이드카가 뜨게 하세요.
+- 40분 타이머. CKAD 는 CKA 보다 문제 수가 많고 짧습니다 — 한 문제에 5분 넘게 붙잡히면 넘기세요.
+
+## 응용
+
+- 두 세트를 합쳐 **모의고사 24문제 2시간** — CKA 15 + CKAD 9 식으로 섞기
+- 시나리오 추가: init container 순서 문제, `envFrom` 전체 주입, PodDisruptionBudget, Canary(replica 비율)
+- check.sh 를 CI 에 걸어 스터디원 제출물을 자동 채점
+- 틀린 문제만 다시 심는 `setup.sh --only 5,8` 옵션 (Claude 에게 시키면 5분)

@@ -1,0 +1,156 @@
+app:
+  description: 사이트 문서(k8s 시리즈 6건)를 지식으로 붙인 RAG 챗봇. 문서에 있는 것만 답하고 출처 청크를 보여 준다
+  icon: 📚
+  icon_background: '#FEF3C7'
+  icon_type: emoji
+  mode: advanced-chat
+  name: AI Usecases 문서 Q&A
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/openai:1.0.5@51583313a5988d5dca405063831ffeeacdc1f2e95f32a8c10b4c281ceef39ebb
+    version: null
+kind: app
+version: 0.7.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: 'kind·Helm·Argo CD·CKA/CKAD 사례 문서와 AI Readiness Gap 보고서에 대해 물어보세요. 문서에 없는 건 없다고 답합니다.'
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions:
+    - kind 클러스터에서 Ingress 가 localhost 로 안 붙을 때 원인은?
+    - Helm 롤백하면 --set 값은 어떻게 되나?
+    - Argo CD selfHeal 을 켜면 kubectl scale 은 어떻게 되나?
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data: { isInIteration: false, isInLoop: false, sourceType: start, targetType: knowledge-retrieval }
+      id: start-kr
+      source: start
+      sourceHandle: source
+      target: kr
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: { isInIteration: false, isInLoop: false, sourceType: knowledge-retrieval, targetType: llm }
+      id: kr-llm
+      source: kr
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data: { isInIteration: false, isInLoop: false, sourceType: llm, targetType: answer }
+      id: llm-answer
+      source: llm
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 시작
+        type: start
+        variables: []
+      height: 73
+      id: start
+      position: { x: 80, y: 282 }
+      positionAbsolute: { x: 80, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    - data:
+        dataset_ids:
+        - 8ae0ab6d-1ae2-4dec-82d0-2520dd4a3715
+        multiple_retrieval_config:
+          reranking_enable: false
+          reranking_mode: weighted_score
+          score_threshold: null
+          top_k: 6
+          weights:
+            keyword_setting: { keyword_weight: 0.3 }
+            vector_setting: { embedding_model_name: gemini-embedding-001, embedding_provider_name: langgenius/gemini/google, vector_weight: 0.7 }
+        query_variable_selector: [sys, query]
+        retrieval_mode: multiple
+        selected: false
+        title: 지식 검색
+        type: knowledge-retrieval
+      height: 92
+      id: kr
+      position: { x: 380, y: 282 }
+      positionAbsolute: { x: 380, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    - data:
+        context:
+          enabled: true
+          variable_selector: [kr, result]
+        memory:
+          query_prompt_template: '{{#sys.query#}}'
+          role_prefix: { assistant: '', user: '' }
+          window: { enabled: false, size: 10 }
+        model:
+          completion_params:
+            temperature: 0.2
+          mode: chat
+          name: gemini-2.5-flash
+          provider: langgenius/gemini/google
+        prompt_template:
+        - id: sys-1
+          role: system
+          text: '아래 컨텍스트에 있는 내용만 근거로 한국어로 답한다. 컨텍스트에 없으면 "문서에 없는 내용입니다" 라고 답하고 추측하지 않는다. 답은 5줄 이내, 명령어나 수치는 그대로 인용한다.
+
+            컨텍스트:
+            {{#context#}}'
+        selected: false
+        title: 답변 생성
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm
+      position: { x: 680, y: 282 }
+      positionAbsolute: { x: 680, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    - data:
+        answer: '{{#llm.text#}}'
+        selected: false
+        title: 답변
+        type: answer
+        variables: []
+      height: 103
+      id: answer
+      position: { x: 980, y: 282 }
+      positionAbsolute: { x: 980, y: 282 }
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 0
+    viewport: { x: 0, y: 0, zoom: 1 }
