@@ -250,3 +250,68 @@ html[data-dark-mode="true"] .kb-badge-level-3 { color: #f87171; }
     /* 좁은 화면에서는 캡처가 번호 칸 들여쓰기를 무시하고 본문 폭을 다 쓴다 */
     .kb-step .kb-shot { margin-left: calc(-32px - .7rem); }
 }
+
+/* ---------- 페이지네이션 ---------- */
+.kb-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: .4rem;
+    margin: 2rem 0 .5rem;
+}
+
+.kb-pager-nums { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+
+.kb-pager-step,
+.kb-pager-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    height: 2.25rem;
+    padding: 0 .7rem;
+    border: 1px solid var(--kb-border);
+    border-radius: .45rem;
+    font: inherit;
+    font-size: .9rem;
+    font-weight: 600;
+    text-decoration: none !important;
+    color: inherit !important;
+    background: var(--kb-surface);
+    cursor: pointer;
+    transition: border-color .12s ease, background .12s ease;
+}
+
+.kb-pager-step:hover,
+.kb-pager-num:hover { border-color: var(--kb-accent); color: var(--kb-accent) !important; }
+
+.kb-pager-num.is-current {
+    background: var(--kb-accent);
+    border-color: var(--kb-accent);
+    color: #fff !important;
+    cursor: default;
+}
+
+.kb-pager-step.is-disabled { opacity: .4; pointer-events: none; }
+
+.kb-pager-gap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.5rem;
+    height: 2.25rem;
+    color: var(--kb-muted);
+}
+
+.kb-pager-info { text-align: center; font-size: .82rem; color: var(--kb-muted); margin: 0 0 .5rem; }
+
+/* 테마가 본문 ul/ol 에 붙이는 점·카운터 마커를 kb 목록에서는 해제한다 */
+.docs-content .main-content .kb-termlist { padding-left: 0; line-height: normal; }
+.docs-content .main-content .kb-termlist > li { position: static; padding-left: 0; margin-bottom: 0; }
+.docs-content .main-content .kb-termlist > li::before { content: none; display: none; }
+
+@media (max-width: 575.98px) {
+    .kb-pager { gap: .3rem; }
+    .kb-pager-step, .kb-pager-num { min-width: 2rem; height: 2rem; padding: 0 .5rem; font-size: .85rem; }
+}

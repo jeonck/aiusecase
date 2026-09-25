@@ -1,0 +1,48 @@
+{{- /*
+  서버 사이드 페이지네이션 (필터가 없는 목록용).
+  {{ partial "kb/pagination.html" (dict "paginator" $paginator) }}
+  현재 쪽 기준 앞뒤 2쪽을 보여주고, 멀리 떨어진 구간은 줄임표로 접는다.
+*/ -}}
+{{- $pag := .paginator -}}
+{{- if gt $pag.TotalPages 1 -}}
+{{- $cur := $pag.PageNumber -}}
+{{- $total := $pag.TotalPages -}}
+{{- $window := 2 -}}
+{{- $start := cond (lt (sub $cur $window) 1) 1 (sub $cur $window) -}}
+{{- $end := cond (gt (add $cur $window) $total) $total (add $cur $window) -}}
+<nav class="kb-pager" aria-label="목록 페이지 이동">
+    {{- with $pag.Prev }}
+    <a class="kb-pager-step" href="{{ .URL }}" rel="prev">← 이전</a>
+    {{- else }}
+    <span class="kb-pager-step is-disabled" aria-disabled="true">← 이전</span>
+    {{- end }}
+
+    <div class="kb-pager-nums">
+        {{- if gt $start 1 }}
+        <a class="kb-pager-num" href="{{ (index $pag.Pagers 0).URL }}" aria-label="1 페이지">1</a>
+            {{- if gt $start 2 }}<span class="kb-pager-gap" aria-hidden="true">…</span>{{ end }}
+        {{- end }}
+
+        {{- range seq $start $end }}
+            {{- $n := . }}
+            {{- if eq $n $cur }}
+        <span class="kb-pager-num is-current" aria-current="page">{{ $n }}</span>
+            {{- else }}
+        <a class="kb-pager-num" href="{{ (index $pag.Pagers (sub $n 1)).URL }}" aria-label="{{ $n }} 페이지">{{ $n }}</a>
+            {{- end }}
+        {{- end }}
+
+        {{- if lt $end $total }}
+            {{- if lt $end (sub $total 1) }}<span class="kb-pager-gap" aria-hidden="true">…</span>{{ end }}
+        <a class="kb-pager-num" href="{{ (index $pag.Pagers (sub $total 1)).URL }}" aria-label="{{ $total }} 페이지">{{ $total }}</a>
+        {{- end }}
+    </div>
+
+    {{- with $pag.Next }}
+    <a class="kb-pager-step" href="{{ .URL }}" rel="next">다음 →</a>
+    {{- else }}
+    <span class="kb-pager-step is-disabled" aria-disabled="true">다음 →</span>
+    {{- end }}
+</nav>
+<p class="kb-pager-info">{{ $cur }} / {{ $total }} 쪽 · 전체 {{ $pag.TotalNumberOfElements }}건</p>
+{{- end -}}

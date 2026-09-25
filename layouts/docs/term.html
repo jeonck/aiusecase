@@ -1,7 +1,12 @@
 {{ define "main" }}
     {{ .Content }}
-    <p class="lead">이 분류에 속한 유스케이스 {{ len .Pages }}건</p>
-    <div class="kb-grid">
-        {{ range .Pages.ByLastmod.Reverse }}{{ partial "kb/card.html" . }}{{ end }}
-    </div>
+    {{ $items := .Pages.ByLastmod.Reverse }}
+    <p class="lead">이 분류에 속한 유스케이스 {{ len $items }}건</p>
+    {{ if $items }}
+        {{ $paginator := .Paginate $items }}
+        <div class="kb-grid">
+            {{ range $paginator.Pages }}{{ partial "kb/card.html" . }}{{ end }}
+        </div>
+        {{ partial "kb/pagination.html" (dict "paginator" $paginator) }}
+    {{ end }}
 {{ end }}

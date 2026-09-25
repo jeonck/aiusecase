@@ -9,6 +9,10 @@ timeZone                = "Asia/Seoul"
 # 한글 제목을 URL 안전한 슬러그로 다루기 위해 명시적 slug 를 권장한다.
 # (스크립트 scripts/new-usecase.sh 가 영문 슬러그를 자동 생성한다)
 
+[pagination]
+  pagerSize = 12
+  path      = "page"
+
 [markup]
   [markup.goldmark.renderer]
     unsafe = true

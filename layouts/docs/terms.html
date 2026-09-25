@@ -1,8 +1,0 @@
-{{ define "main" }}
-    {{ .Content }}
-    <ul class="kb-termlist">
-        {{ range .Pages.ByCount }}
-        <li><a href="{{ .RelPermalink }}">{{ .Title }} <span class="kb-count">{{ .Count }}</span></a></li>
-        {{ end }}
-    </ul>
-{{ end }}

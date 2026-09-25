@@ -1,22 +1,46 @@
 {{ define "main" }}
     {{ .Content }}
 
+    {{- /* 분류 인덱스(/categories/, /tools/, /tags/, /difficulty/)는 칩 목록으로 보여준다.
+           Hugo 는 이 사이트에서 taxonomy 종류도 list.html 로 떨어뜨리므로 여기서 함께 처리한다.
+           (docs/terms.html 은 템플릿 탐색에서 선택되지 않는다) */ -}}
+    {{ if eq .Kind "taxonomy" }}
+        {{ $terms := .Data.Terms.ByCount }}
+        {{ if $terms }}
+        <ul class="kb-termlist">
+            {{ range $terms }}
+            {{ $count := .Count }}
+            {{ with .Page }}
+            <li><a href="{{ .RelPermalink }}">{{ .Title }} <span class="kb-count">{{ $count }}</span></a></li>
+            {{ end }}
+            {{ end }}
+        </ul>
+        {{ else }}
+        <div class="kb-empty">아직 분류된 사례가 없습니다.</div>
+        {{ end }}
+    {{ else }}
+    {{- /* 섹션 목록. 필터가 없으므로 서버 페이징을 쓴다. */ -}}
     {{ $pages := .Pages.ByWeight }}
     {{ if $pages }}
-    <div class="kb-grid">
-        {{ range $pages }}{{ partial "kb/card.html" . }}{{ end }}
-    </div>
+        {{ $paginator := .Paginate $pages }}
+        <div class="kb-grid">
+            {{ range $paginator.Pages }}{{ partial "kb/card.html" . }}{{ end }}
+        </div>
+        {{ partial "kb/pagination.html" (dict "paginator" $paginator) }}
     {{ else }}
     <div class="kb-empty">
         아직 등록된 유스케이스가 없습니다.
         <a href="{{ "/docs/guide/contribute/" | relURL }}">유스케이스 추가하는 법</a>을 참고해 첫 사례를 올려보세요.
     </div>
     {{ end }}
+    {{ end }}
 
     {{ $recursive := .RegularPagesRecursive }}
     {{ if and (gt (len $recursive) (len .RegularPages)) (eq .Params.showAll true) }}
     <h2 class="mt-5">전체 사례 <span id="kb-count">{{ len $recursive }}</span>건</h2>
-    {{- /* 필터 바: 난이도 3종 + 도구(빈도순) + 검색. 카드의 data-* 속성을 클라이언트에서 거른다 */ -}}
+    {{- /* 필터 바: 난이도 3종 + 도구(빈도순) + 검색. 카드의 data-* 속성을 클라이언트에서 거른다.
+           여기는 서버 페이징을 쓰지 않는다 — 카드를 전부 내려보내야 필터가 전체를 검색한다.
+           대신 걸러낸 결과를 클라이언트에서 쪽 단위로 끊는다. */ -}}
     {{- $tools := dict -}}
     {{- range $recursive }}{{ range .Params.tools }}{{ $tools = merge $tools (dict . (add (index $tools . | default 0) 1)) }}{{ end }}{{ end -}}
     <div class="kb-filter" id="kb-filter">
@@ -37,31 +61,76 @@
         {{ range $recursive.ByLastmod.Reverse }}{{ partial "kb/card.html" . }}{{ end }}
     </div>
     <div class="kb-empty" id="kb-none" hidden>조건에 맞는 사례가 없습니다.</div>
+    <nav class="kb-pager" id="kb-pager" aria-label="목록 페이지 이동" hidden></nav>
+    <p class="kb-pager-info" id="kb-pager-info" hidden></p>
     <script>
     (function () {
         var root = document.getElementById('kb-filter'); if (!root) return;
+        var PAGE_SIZE = {{ site.Params.kb.listPageSize | default 12 }};
         var cards = Array.prototype.slice.call(document.querySelectorAll('#kb-all .kb-card'));
         var search = root.querySelector('.kb-filter-search');
         var reset = document.getElementById('kb-filter-reset');
-        var state = { difficulty: null, tools: [], q: '' };
-        function apply() {
-            var n = 0, q = state.q.trim().toLowerCase();
-            cards.forEach(function (c) {
-                var ok = (!state.difficulty || c.dataset.difficulty === state.difficulty)
+        var pager = document.getElementById('kb-pager');
+        var pagerInfo = document.getElementById('kb-pager-info');
+        var state = { difficulty: null, tools: [], q: '', page: 1 };
+
+        function numHTML(n, cur) {
+            return n === cur
+                ? '<span class="kb-pager-num is-current" aria-current="page">' + n + '</span>'
+                : '<button type="button" class="kb-pager-num" data-page="' + n + '" aria-label="' + n + ' 페이지">' + n + '</button>';
+        }
+        function stepHTML(label, n, enabled) {
+            return enabled
+                ? '<button type="button" class="kb-pager-step" data-page="' + n + '">' + label + '</button>'
+                : '<span class="kb-pager-step is-disabled" aria-disabled="true">' + label + '</span>';
+        }
+        function renderPager(pages, total) {
+            if (pages <= 1) { pager.hidden = true; pagerInfo.hidden = true; pager.innerHTML = ''; return; }
+            var cur = state.page, w = 2;
+            var start = Math.max(1, cur - w), end = Math.min(pages, cur + w);
+            var h = stepHTML('← 이전', cur - 1, cur > 1) + '<div class="kb-pager-nums">';
+            if (start > 1) {
+                h += numHTML(1, cur);
+                if (start > 2) { h += '<span class="kb-pager-gap" aria-hidden="true">…</span>'; }
+            }
+            for (var n = start; n <= end; n++) { h += numHTML(n, cur); }
+            if (end < pages) {
+                if (end < pages - 1) { h += '<span class="kb-pager-gap" aria-hidden="true">…</span>'; }
+                h += numHTML(pages, cur);
+            }
+            h += '</div>' + stepHTML('다음 →', cur + 1, cur < pages);
+            pager.innerHTML = h;
+            pager.hidden = false;
+            pagerInfo.hidden = false;
+            pagerInfo.textContent = cur + ' / ' + pages + ' 쪽 · 전체 ' + total + '건';
+        }
+
+        function apply(resetPage) {
+            if (resetPage) { state.page = 1; }
+            var q = state.q.trim().toLowerCase();
+            var matched = cards.filter(function (c) {
+                return (!state.difficulty || c.dataset.difficulty === state.difficulty)
                     && state.tools.every(function (t) { return c.dataset.tools.split('|').indexOf(t) >= 0; })
                     && (!q || c.dataset.text.toLowerCase().indexOf(q) >= 0);
-                c.hidden = !ok; if (ok) n++;
             });
-            document.getElementById('kb-count').textContent = n;
-            document.getElementById('kb-none').hidden = n > 0;
+            var total = matched.length;
+            var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+            if (state.page > pages) { state.page = pages; }
+            var from = (state.page - 1) * PAGE_SIZE;
+            var shown = matched.slice(from, from + PAGE_SIZE);
+            cards.forEach(function (c) { c.hidden = shown.indexOf(c) < 0; });
+            document.getElementById('kb-count').textContent = total;
+            document.getElementById('kb-none').hidden = total > 0;
             reset.hidden = !(state.difficulty || state.tools.length || q);
+            renderPager(pages, total);
         }
+
         root.addEventListener('click', function (e) {
             var b = e.target.closest('.kb-chip'); if (!b) return;
             if (b.id === 'kb-filter-reset') {
-                state = { difficulty: null, tools: [], q: '' }; search.value = '';
+                state = { difficulty: null, tools: [], q: '', page: 1 }; search.value = '';
                 root.querySelectorAll('.kb-chip.is-on').forEach(function (x) { x.classList.remove('is-on'); });
-                return apply();
+                return apply(true);
             }
             var v = b.dataset.value;
             if (b.dataset.kind === 'difficulty') {
@@ -69,12 +138,20 @@
                 root.querySelectorAll('[data-kind=difficulty]').forEach(function (x) { x.classList.toggle('is-on', x === b && !on); });
             } else {
                 var i = state.tools.indexOf(v);
-                if (i >= 0) state.tools.splice(i, 1); else state.tools.push(v);
+                if (i >= 0) { state.tools.splice(i, 1); } else { state.tools.push(v); }
                 b.classList.toggle('is-on', i < 0);
             }
-            apply();
+            apply(true);
         });
-        search.addEventListener('input', function () { state.q = search.value; apply(); });
+        search.addEventListener('input', function () { state.q = search.value; apply(true); });
+        pager.addEventListener('click', function (e) {
+            var b = e.target.closest('[data-page]'); if (!b) return;
+            state.page = parseInt(b.dataset.page, 10);
+            apply(false);
+            document.getElementById('kb-all').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+        apply(true);
     })();
     </script>
     {{ end }}
