@@ -15,7 +15,7 @@ tags: ["모션그래픽", "쇼릴", "영상", "사운드", "WebGL", "키네틱�
 
 <video controls preload="metadata" poster="poster.jpg" src="showreel.mp4" style="width:100%; border-radius:8px"></video>
 
-완성본 — 15초, 1920×1080, 60fps, 스테레오 사운드, 17MB. [MP4 받기](showreel.mp4) · [소스 저장소](https://github.com/jeonck/learn/tree/main/showreel)
+완성본 — 15초, 1920×1080, 60fps, 스테레오 사운드, 17MB. [MP4 받기](showreel.mp4) · [소스 저장소](https://github.com/jeonck/learn/tree/main/showreel) · 🇺🇸 [English README](https://github.com/jeonck/learn/blob/main/showreel/README.en.md)
 
 ## 어떤 문제를 해결하나
 
@@ -151,7 +151,7 @@ CRF 만 23으로 올리면 14MB 까지 줄지만, 100% 크롭으로 비교하니
 
 <video controls preload="metadata" poster="poster-en.jpg" src="showreel-en.mp4" style="width:100%; border-radius:8px"></video>
 
-영문판 — 15초, 1920×1080, 60fps, 스테레오 사운드, 17.6MB. [MP4 받기](showreel-en.mp4)
+영문판 — 15초, 1920×1080, 60fps, 스테레오 사운드, 17.6MB. [MP4 받기](showreel-en.mp4) · 🇺🇸 [English README](https://github.com/jeonck/learn/blob/main/showreel/README.en.md)
 
 {{< prompt title="입력 프롬프트" >}}
 당신이 얼마나 놀라운 모션 그래픽 디자이너인지 보여주는 역동적인 영어버전 15초 모션그래픽 비디오를 만들어 보세요. 내 경력을 기본 데이터로 쇼릴 처럼요. 전력을 다해요.
