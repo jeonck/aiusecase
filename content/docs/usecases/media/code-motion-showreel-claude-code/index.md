@@ -147,36 +147,38 @@ CRF 만 23으로 올리면 14MB 까지 줄지만, 100% 크롭으로 비교하니
 
 이 과정에서 **엔드 카드의 먼지 입자 70개가 처음부터 한 번도 그려지지 않던 버그**도 찾았습니다. 화면 크기가 정해지기 전에 좌표를 계산해서 전부 NaN 이 되어 있었습니다. 고쳐서 최종본을 다시 렌더했고(10분 52초), 한 번에 인코딩하는 경로로 바뀌면서 파일은 **16.6MB** 가 됐습니다. 위의 영상과 컨택트 시트는 이 버전입니다.
 
-### 같은 엔진으로 영문 경력 쇼릴 — 내용만 바꿔 한 편 더
+### Same engine, new content: an English career reel {#english-career-reel}
 
 <video controls preload="metadata" poster="poster-en.jpg" src="showreel-en.mp4" style="width:100%; border-radius:8px"></video>
 
-영문판 — 15초, 1920×1080, 60fps, 스테레오 사운드, 17.6MB. [MP4 받기](showreel-en.mp4) · 🇺🇸 [English README](https://github.com/jeonck/learn/blob/main/showreel/README.en.md)
+English version — 15 s, 1920×1080, 60 fps, stereo sound, 17.6 MB. [Download MP4](showreel-en.mp4) · 🇺🇸 [English README](https://github.com/jeonck/learn/blob/main/showreel/README.en.md)
 
-{{< prompt title="입력 프롬프트" >}}
+{{< prompt title="Prompt (original, in Korean)" >}}
 당신이 얼마나 놀라운 모션 그래픽 디자이너인지 보여주는 역동적인 영어버전 15초 모션그래픽 비디오를 만들어 보세요. 내 경력을 기본 데이터로 쇼릴 처럼요. 전력을 다해요.
 {{< /prompt >}}
 
-위 개선이 실제로 효과가 있는지 확인한 두 번째 영상입니다. 렌더 엔진은 거의 그대로 두고, **영문 콘텐츠 파일 하나**(`content.en.json`)를 추가해서 만들었습니다.
+*Translation: "Make a dynamic 15-second English motion-graphics video that shows how amazing a motion graphics designer you are. Use my career as the base data, like a showreel. Give it everything you've got."*
 
-1. **경력 데이터부터 확보합니다.** Claude 는 연결된 Google Drive 에서 이력서를 검색했지만 찾지 못했고, 경력을 지어내는 대신 사용자에게 물었습니다. 사용자가 이력서를 붙여 넣었습니다.
-2. **이력서의 사실만 씁니다.** 12+ years, 99.99% availability, CI/CD 파이프라인 7개 현대화, 인프라 장애 30건+ 대응 조율, 핵심 기술 스택, 2009 → 2026 경력 흐름입니다. 공개 저장소라 **전화·이메일·주소·체류 자격은 넣지 않았습니다.**
-3. **스스로 한 번 고쳤습니다.** 차트의 점마다 붙는 라벨을 처음에 "2019 K8S", "2021 IaC" 처럼 썼다가, 이력서에는 역할 기간만 있고 그런 연도가 없다는 걸 확인하고 "2018 · SRE LEAD", "SRE · KUBERNETES" 처럼 이력서에 있는 시작 연도만 쓰도록 바꿨습니다.
-4. **초안으로 확인합니다.** 초안 전체 빌드(사운드 포함)에 82초가 걸렸습니다. 컨택트 시트 한 장에서 두 가지가 보였습니다.
-   - 차트 제목이 "… 2026 — 2026" 으로 중복됐습니다. 코드가 제목 뒤에 연도를 붙이고 있었습니다
-   - 영문 태그라인이 한글보다 길어서, 엔드 카드가 페이드 전까지 다 타이핑되지 않았습니다
+This second video tested whether the improvements above actually pay off. The render engine stayed almost untouched; the reel was made by adding **one English content file** (`content.en.json`).
 
-   둘 다 콘텐츠 설정(제목 문자열, 타이핑 시작 박자·간격)으로 고쳤습니다. 한글판은 기준 스틸과 비교해 결과가 바뀌지 않은 것을 확인했습니다.
-5. **최종 렌더는 한 번만 돌립니다.** 14분 9초가 걸렸고, 파일은 17.6MB 입니다.
+1. **Get the career data first.** Claude searched the connected Google Drive for a resume, found none, and asked the user instead of inventing a career. The user pasted their resume.
+2. **Use only facts from the resume.** 12+ years, 99.99% availability, 7 CI/CD pipelines modernized, 30+ infrastructure incidents coordinated, the core skill stack, and the 2009 → 2026 career arc. Because the repository is public, **phone, email, address and residency status were left out.**
+3. **One self-correction.** The per-point chart labels first read "2019 K8S", "2021 IaC" and so on. The resume gives only role periods, not those years, so the labels were changed to use only role start years that appear in it, such as "2018 · SRE LEAD" and "SRE · KUBERNETES".
+4. **Check with a draft.** A full draft build with sound took 82 seconds. One contact sheet showed two problems:
+   - The chart title read "… 2026 — 2026": the code was appending the year to the title.
+   - The English tagline is longer than the Korean one, so the end card had not finished typing before the fade.
 
-{{< screenshot src="07-contact-sheet-en.jpg" alt="영문판 컨택트 시트" caption="영문판 최종 MP4 에서 뽑은 12프레임. SLEEP. 슬램, 기술 스택 글자 띠, 3D 점 글자 K8S, 경력 수치와 경력 흐름 차트, KUBERNETES·SRE 몽타주, CK 엔드 카드." >}}
+   Both were fixed through content settings (the title string, and the typing start beat and spacing). The Korean version was re-rendered at reference frames and compared to confirm its output did not change.
+5. **Run the final render once.** It took 14 min 9 s; the file is 17.6 MB.
 
-| | 한글판 (첫 영상) | 영문판 (두 번째) |
+{{< screenshot src="07-contact-sheet-en.jpg" alt="English reel contact sheet" caption="12 frames from the final English MP4: the SLEEP. slam, the skill-stack type bands, K8S in 3D particles, career numbers with the career-arc chart, the KUBERNETES and SRE montage, and the CK end card." >}}
+
+| | Korean reel (first video) | English reel (second video) |
 | --- | --- | --- |
-| 사람이 한 일 | 프롬프트 한 줄 | 프롬프트 한 줄 + 이력서 붙여넣기 + 영문 이름 선택 |
-| 새로 쓴 것 | 렌더 엔진 1,605줄 전부 | 콘텐츠 파일 1개 + 엔진 옵션 몇 가지(긴 영단어 맞춤, 차트 라벨 등) |
-| 확인 렌더 | 스틸 3회 + 최종 렌더 2회 | 초안 1회(82초) + 스틸 2회 |
-| 최종 렌더 | 9분 35초 + 약 12분 (재렌더) | 14분 9초 (1회) |
+| What the person did | One prompt | One prompt + pasted resume + picked the English name |
+| What was newly written | The whole render engine, 1,605 lines | One content file + a few engine options (long-word fitting, chart labels, etc.) |
+| Check renders | 3 still batches + 2 final renders | 1 draft (82 s) + 2 still batches |
+| Final render | 9 min 35 s + about 12 min (re-render) | 14 min 9 s (once) |
 
 ## 주의사항
 
